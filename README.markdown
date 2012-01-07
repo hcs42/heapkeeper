@@ -36,6 +36,11 @@ Set up ExponWords and run it in debug mode
         $ cd Heapkeeper
         $ git clone git://github.com/hcs42/heapkeeper.git hk
 
+   If you forked the Heapkeeper repository, use your own repository instead:
+
+        $ cd Heapkeeper
+        $ git clone git@github.com:<username>/heapkeeper.git
+
 3. Edit `settings.py` (you will find an example in `hk/setup/settings.py`):
 
    * `DATABASES`: fill it in according to the database you want to use. I used sqlite.

@@ -1,0 +1,39 @@
+<html>
+    <head>
+        <title>
+            Heapkeeper
+        </title>
+        <style>
+            div.message { padding-left: 3em; }
+        </style>
+    </head>
+    <body>
+        <h1>
+            Add new message
+        </h1>
+
+        {% if error_message %}
+        <p>
+            <strong>
+                {{ error_message }}
+            </strong>
+        </p>
+        {% endif %}
+
+        <form action="/addmessage/" method="post">
+        {% csrf_token %}
+            <label for="author">Author ID</label>
+            <input type="input" name="author" value="" />
+            <br />
+            <label for="parent">Parent ID</label>
+            <input type="input" name="parent" value="" />
+            <br />
+            <label for="text">Message text</label>
+            <br />
+            <textarea name="text">
+            </textarea>
+            <br />
+            <input type="submit" value="Add message" />
+        </form>
+    </body>
+<html>

@@ -54,7 +54,7 @@ def conversation(request, conv_id):
     root = conv.root_message
     l = []
     print_message(l, root)
-    ls = [str(m) for m in l]
+    ls = [unicode(m) for m in l]
     return render_to_response(
             'conversation.html',
             {'conv': conv,

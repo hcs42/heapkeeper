@@ -57,13 +57,10 @@ class Message(models.Model):
 
 
 class Label(models.Model):
-    text = models.CharField(max_length=64)
+    text = models.CharField(max_length=64, primary_key=True)
 
     def __unicode__(self):
-        return "%s (#%d)" % (
-                self.text,
-                self.id,
-            )
+        return "%s" % self.text
 
 
 class MessageVersion(models.Model):

@@ -19,6 +19,8 @@ from django.db import models
 from django.contrib.auth.models import User
 
 class Message(models.Model):
+    users_have_read = models.ManyToManyField(User, null=True, blank=True)
+
     def __unicode__(self):
         return "Message #%d" % (
                 self.id,
@@ -123,7 +125,6 @@ class Conversation(models.Model):
     subject = models.CharField(max_length=256) 
     labels = models.ManyToManyField(Label, null=True, blank=True)
     root_message = models.ForeignKey(Message)
-    users_have_read = models.ManyToManyField(User, null=True, blank=True)
     heap = models.ForeignKey(Heap)
 
     def __unicode__(self):

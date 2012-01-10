@@ -109,6 +109,7 @@ class UserRight(models.Model):
     user = models.ForeignKey(User)
     heap = models.ForeignKey(Heap)
     right = models.SmallIntegerField(choices=RIGHT_CHOICES)
+    unique_together = ('user', 'heap')
 
     def __unicode__(self):
         return "%s: %s is %s" % (

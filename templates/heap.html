@@ -14,7 +14,7 @@
         <ul>
         {% for conv in convs %}
             <li>
-                <a href="/conversation/{{conv.id}}/">
+                <a href="{% url hk.views.conversation conv.id %}">
                     {{ conv.subject }}
                 </a>
             </li>

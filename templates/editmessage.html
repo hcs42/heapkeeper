@@ -20,7 +20,7 @@
         </p>
         {% endif %}
 
-        <form action="/editmessage/{{ msg_id }}/" method="post">
+        <form action="{% url hk.views.editmessage msg_id %}" method="post">
         {% csrf_token %}
             <label for="author">Author ID</label>
             <input type="input" name="author" value="{{ lv.author.id }}" />

@@ -14,7 +14,7 @@
         <ul>
         {% for heap in heaps %}
             <li>
-                <a href="/heap/{{heap.id}}/">
+                <a href="{% url hk.views.heap heap.id %}">
                     {{ heap.long_name }}
                 </a>
             </li>

@@ -21,6 +21,7 @@ from django.template import RequestContext
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.urlresolvers import reverse
 from hk.models import Message, MessageVersion, Conversation, Heap
 import datetime
 
@@ -37,13 +38,14 @@ def format_labels(object):
 
 def print_message(l, msg):
     children = msg.get_children()
+    edit_url = reverse('hk.views.editmessage', args=(msg.id,))
     l.append("<div class='message'>\n")
     l.append("<a name='message_%d'></a>\n" % msg.id)
     l.append('<h3>\n&lt;%d&gt;\n</h3>\n' % msg.id)
     l.append('<h3>\n%s\n</h3>\n' % msg.latest_version().author)
     l.append('<h3>\n%s\n</h3>\n' % format_labels(msg.latest_version()))
     l.append('<h3>\n%s\n</h3>\n' % msg.latest_version().creation_date)
-    l.append("<a href='/editmessage/%d/'>edit</a>\n" % msg.id)
+    l.append("<a href='%s'>edit</a>\n" % edit_url)
     l.append('<p>\n%s\n</p>\n' % msg.latest_version().text)
     for child in msg.get_children():
         print_message(l, child)
@@ -140,9 +142,10 @@ def editmessage(request, msg_id):
             error_message = 'Message saved.'
             root_msg = Message.objects.get(id=msg_id).get_root_message()
             conv_id = Conversation.objects.get(root_message=root_msg).id
+            conv_url = reverse('hk.views.conversation', args=(conv_id,))
             return redirect(
-                    '/conversation/%d/#message_%d' %
-                        (conv_id, int(msg_id))
+                    '%s#message_%d' %
+                        (conv_url, int(msg_id))
                 )
     return render_to_response('editmessage.html',
             {'error_message': error_message,

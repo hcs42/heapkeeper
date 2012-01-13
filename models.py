@@ -17,6 +17,7 @@
 
 from django.db import models
 from django.contrib.auth.models import User
+from django.core import urlresolvers
 
 class Message(models.Model):
     users_have_read = models.ManyToManyField(User, null=True, blank=True)
@@ -36,7 +37,10 @@ class Message(models.Model):
 
     def latest_version_link(self):
         latest = self.latest_version()
-        url = '/admin/hk/messageversion/%d/' % latest.id
+        url = urlresolvers.reverse(
+                'admin:hk_messageversion_change',
+                args=(latest.id,)
+            )
         return '<a href="%s">%s</a>' % (url, latest)
     latest_version_link.allow_tags = True
 

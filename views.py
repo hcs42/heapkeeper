@@ -89,7 +89,7 @@ class EditMessageForm(forms.Form):
     creation_date = forms.DateTimeField()
     text = forms.CharField()
 
-def testaddmessage(request):
+def addmessage(request):
     error_message = ''
     if request.method == 'POST':
         form = AddMessageForm(request.POST)
@@ -112,7 +112,7 @@ def testaddmessage(request):
                 )
             mv.save()
             error_message = 'Message added.'
-    return render_to_response('testaddmessage.html',
+    return render_to_response('addmessage.html',
             {'error_message': error_message},
             context_instance=RequestContext(request))
 

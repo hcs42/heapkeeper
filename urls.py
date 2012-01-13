@@ -27,5 +27,5 @@ urlpatterns = patterns('hk.views',
     (r'^conversation/(?P<conv_id>\d+)/$', 'conversation'),
     (r'^heap/(?P<heap_id>\d+)/$', 'heap'),
     (r'^heap/$', 'heaps'),
-    (r'^testaddmessage/$', 'testaddmessage'),
+    (r'^addmessage/$', 'addmessage'),
 )

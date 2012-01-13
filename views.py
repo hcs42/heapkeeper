@@ -153,3 +153,25 @@ def editmessage(request, msg_id):
              'cd': lv.creation_date.strftime('%d/%m/%y %H:%M:%S'),
              'lv': lv},
             context_instance=RequestContext(request))
+
+class AddHeapForm(forms.Form):
+    short_name = forms.CharField()
+    long_name = forms.CharField()
+
+def addheap(request):
+    error_message = ''
+    if request.method == 'POST':
+        form = AddHeapForm(request.POST)
+        if not form.is_valid():
+            error_message = form.errors
+        else:
+            heap = Heap(
+                    short_name=form.cleaned_data['short_name'],
+                    long_name=form.cleaned_data['long_name'],
+                    visibility=0
+                )
+            heap.save()
+            error_message = 'Heap added.'
+    return render_to_response('addheap.html',
+            {'error_message': error_message},
+            context_instance=RequestContext(request))

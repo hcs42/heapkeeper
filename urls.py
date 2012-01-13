@@ -28,4 +28,5 @@ urlpatterns = patterns('hk.views',
     (r'^heap/(?P<heap_id>\d+)/$', 'heap'),
     (r'^heap/$', 'heaps'),
     (r'^addmessage/$', 'addmessage'),
+    (r'^addheap/$', 'addheap'),
 )

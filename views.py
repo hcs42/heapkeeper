@@ -80,7 +80,7 @@ def heaps(request):
 class AddMessageForm(forms.Form):
     parent = forms.IntegerField()
     author = forms.IntegerField()
-    text = forms.CharField()
+    text = forms.CharField(widget=forms.Textarea())
 
 class EditMessageForm(forms.Form):
     parent = forms.IntegerField(required=False)
@@ -111,8 +111,12 @@ def addmessage(request):
                 )
             mv.save()
             error_message = 'Message added.'
+    else:
+        form = AddMessageForm()
+
     return render_to_response('addmessage.html',
-            {'error_message': error_message},
+            {'error_message': error_message,
+             'form': form},
             context_instance=RequestContext(request))
 
 def editmessage(request, msg_id):

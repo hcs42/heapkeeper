@@ -22,18 +22,10 @@
 
         <form action="{% url hk.views.addmessage %}" method="post">
         {% csrf_token %}
-            <label for="author">Author ID</label>
-            <input type="input" name="author" value="" />
-            <br />
-            <label for="parent">Parent ID</label>
-            <input type="input" name="parent" value="" />
-            <br />
-            <label for="text">Message text</label>
-            <br />
-            <textarea name="text">
-            </textarea>
-            <br />
-            <input type="submit" value="Add message" />
+        <table>
+          {{ form.as_table }}
+        </table>
+        <input type="submit" value="Add message" />
         </form>
     </body>
 <html>

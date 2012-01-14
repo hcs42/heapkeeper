@@ -175,3 +175,38 @@ def addheap(request):
     return render_to_response('addheap.html',
             {'error_message': error_message},
             context_instance=RequestContext(request))
+
+class AddConversationForm(forms.Form):
+    heap = forms.IntegerField()
+    author = forms.IntegerField()
+    subject = forms.CharField()
+    text = forms.CharField()
+
+def addconv(request):
+    error_message = ''
+    if request.method == 'POST':
+        form = AddConversationForm(request.POST)
+        if not form.is_valid():
+            error_message = form.errors
+        else:
+            now = datetime.datetime.now()
+            root_msg = Message()
+            root_msg.save()
+            mv = MessageVersion(
+                    message=Message.objects.get(id=root_msg.id),
+                    author=User.objects.get(id=form.cleaned_data['author']),
+                    creation_date=now,
+                    version_date=now,
+                    text=form.cleaned_data['text']
+                )
+            mv.save()
+            conv = Conversation(
+                    heap_id=int(form.cleaned_data['heap']),
+                    subject=form.cleaned_data['subject'],
+                    root_message=root_msg
+                )
+            conv.save()
+            error_message = 'Conversation started.'
+    return render_to_response('addconv.html',
+            {'error_message': error_message},
+            context_instance=RequestContext(request))

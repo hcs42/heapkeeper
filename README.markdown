@@ -67,8 +67,8 @@ Set up Heapkeeper and run it in debug mode
 
 7. Copy the startup scripts and change the ports in them if you need to:
 
-        $ cp hk/setup/start_production.sh hk/setup/start_debug.sh .
-        $ vim hk/setup/start_production.sh hk/setup/start_debug.sh
+        $ cp hk/setup/start_debug.sh hk/setup/start_debug.sh .
+        $ vim hk/setup/start_debug.sh hk/setup/start_debug.sh
 
 8. Start the server in debug mode:
 

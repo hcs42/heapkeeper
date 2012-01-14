@@ -1,0 +1,27 @@
+<html>
+    <head>
+        <title>
+            Heapkeeper
+        </title>
+        <style>
+            div.message { padding-left: 3em; }
+        </style>
+    </head>
+    <body>
+        <h1>
+            {{ heap.long_name }}
+        </h1>
+        <ul>
+        {% for conv in convs %}
+            <li>
+                <a href="{% url hk.views.conversation conv.id %}">
+                    {{ conv.subject }}
+                </a>
+            </li>
+        {% endfor %}
+        </ul>
+        <a href="{% url hk.views.addconv %}">
+            Start new conversation
+        </a>
+    </body>
+<html>

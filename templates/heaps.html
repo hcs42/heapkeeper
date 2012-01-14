@@ -1,0 +1,27 @@
+<html>
+    <head>
+        <title>
+            Heapkeeper
+        </title>
+        <style>
+            div.message { padding-left: 3em; }
+        </style>
+    </head>
+    <body>
+        <h1>
+            List of heaps
+        </h1>
+        <ul>
+        {% for heap in heaps %}
+            <li>
+                <a href="{% url hk.views.heap heap.id %}">
+                    {{ heap.long_name }}
+                </a>
+            </li>
+        {% endfor %}
+        </ul>
+        <a href="{% url hk.views.addheap %}">
+            Add new heap
+        </a>
+    </body>
+<html>

@@ -24,7 +24,7 @@ We used the following versions of these programs:
 
 All of these are the default on the latest Ubuntu except for Django.
 
-Set up ExponWords and run it in debug mode
+Set up Heapkeeper and run it in debug mode
 ------------------------------------------
 
 1. Create a Django project (this will create a directory called `Heapkeeper` with some Python files):

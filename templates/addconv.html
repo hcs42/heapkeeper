@@ -1,0 +1,42 @@
+<html>
+    <head>
+        <title>
+            Heapkeeper
+        </title>
+        <style>
+            div.message { padding-left: 3em; }
+        </style>
+    </head>
+    <body>
+        <h1>
+            Start new conversation
+        </h1>
+
+        {% if error_message %}
+        <p>
+            <strong>
+                {{ error_message }}
+            </strong>
+        </p>
+        {% endif %}
+
+        <form action="{% url hk.views.addconv %}" method="post">
+        {% csrf_token %}
+            <label for="author">Heap ID</label>
+            <input type="input" name="heap" value="" />
+            <br />
+            <label for="author">Author ID</label>
+            <input type="input" name="author" value="" />
+            <br />
+            <label for="author">Subject</label>
+            <input type="input" name="subject" value="" />
+            <br />
+            <label for="text">Message text</label>
+            <br />
+            <textarea name="text">
+            </textarea>
+            <br />
+            <input type="submit" value="Start conversation" />
+        </form>
+    </body>
+<html>

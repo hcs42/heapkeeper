@@ -16,6 +16,7 @@
 # Copyright (C) 2012 Attila Nagy
 
 from django.conf.urls.defaults import *
+from django.conf import settings
 
 # Uncomment the next two lines to enable the admin:
 #from django.contrib import admin
@@ -31,3 +32,10 @@ urlpatterns = patterns('hk.views',
     (r'^addheap/$', 'addheap'),
     (r'^addconv/$', 'addconv'),
 )
+
+if settings.DEBUG:
+    urlpatterns += patterns('',
+        (r'^site_media/(?P<path>.*)$',
+         'django.views.static.serve',
+         {'document_root': settings.STATIC_DOC_ROOT}),
+    )

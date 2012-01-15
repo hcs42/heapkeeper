@@ -22,20 +22,9 @@
 
         <form action="{% url hk.views.addconv %}" method="post">
         {% csrf_token %}
-            <label for="author">Heap ID</label>
-            <input type="input" name="heap" value="" />
-            <br />
-            <label for="author">Author ID</label>
-            <input type="input" name="author" value="" />
-            <br />
-            <label for="author">Subject</label>
-            <input type="input" name="subject" value="" />
-            <br />
-            <label for="text">Message text</label>
-            <br />
-            <textarea name="text">
-            </textarea>
-            <br />
+            <table>
+                {{ form.as_table }}
+            </table>
             <input type="submit" value="Start conversation" />
         </form>
     </body>

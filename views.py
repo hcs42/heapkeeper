@@ -82,19 +82,12 @@ class AddMessageForm(forms.Form):
     author = forms.IntegerField()
     text = forms.CharField(widget=forms.Textarea())
 
-class EditMessageForm(forms.Form):
-    parent = forms.IntegerField(required=False)
-    author = forms.IntegerField()
-    creation_date = forms.DateTimeField()
-    text = forms.CharField()
-
 def addmessage(request):
     error_message = ''
+    form = AddMessageForm()
     if request.method == 'POST':
         form = AddMessageForm(request.POST)
-        if not form.is_valid():
-            error_message = form.errors
-        else:
+        if form.is_valid():
             # To create a message:
             # - create a message object
             # - create a related message version
@@ -111,23 +104,36 @@ def addmessage(request):
                 )
             mv.save()
             error_message = 'Message added.'
-    else:
-        form = AddMessageForm()
+            form = AddMessageForm()
 
     return render_to_response('addmessage.html',
             {'error_message': error_message,
              'form': form},
             context_instance=RequestContext(request))
 
+class EditMessageForm(forms.Form):
+    parent = forms.IntegerField(required=False)
+    author = forms.IntegerField()
+    creation_date = forms.DateTimeField()
+    text = forms.CharField(widget=forms.Textarea())
+
+
 def editmessage(request, msg_id):
     error_message = ''
     m = get_object_or_404(Message, pk=msg_id)
     lv = m.latest_version()
+    # Initialize form to fields of latest version
+    form = EditMessageForm(initial=
+            {
+                'creation_date': lv.creation_date,
+                'author': lv.author_id,
+                'parent': lv.parent_id,
+                'text': lv.text
+            }
+        )
     if request.method == 'POST':
         form = EditMessageForm(request.POST)
-        if not form.is_valid():
-            error_message = form.errors
-        else:
+        if form.is_valid():
             now = datetime.datetime.now()
             try:
                 parent = Message.objects.get(id=form.cleaned_data['parent'])
@@ -150,11 +156,11 @@ def editmessage(request, msg_id):
                     '%s#message_%d' %
                         (conv_url, int(msg_id))
                 )
+
     return render_to_response('editmessage.html',
             {'error_message': error_message,
-             'msg_id': m.id,
-             'cd': lv.creation_date.strftime('%d/%m/%y %H:%M:%S'),
-             'lv': lv},
+             'form': form,
+             'msg_id': msg_id},
             context_instance=RequestContext(request))
 
 class AddHeapForm(forms.Form):
@@ -163,35 +169,36 @@ class AddHeapForm(forms.Form):
 
 def addheap(request):
     error_message = ''
+    form = AddHeapForm()
     if request.method == 'POST':
         form = AddHeapForm(request.POST)
-        if not form.is_valid():
-            error_message = form.errors
-        else:
+        if form.is_valid():
             heap = Heap(
                     short_name=form.cleaned_data['short_name'],
                     long_name=form.cleaned_data['long_name'],
                     visibility=0
                 )
             heap.save()
+            form = AddHeapForm()
             error_message = 'Heap added.'
+
     return render_to_response('addheap.html',
-            {'error_message': error_message},
+            {'error_message': error_message,
+             'form': form},
             context_instance=RequestContext(request))
 
 class AddConversationForm(forms.Form):
     heap = forms.IntegerField()
     author = forms.IntegerField()
     subject = forms.CharField()
-    text = forms.CharField()
+    text = forms.CharField(widget=forms.Textarea())
 
 def addconv(request):
     error_message = ''
+    form = AddConversationForm()
     if request.method == 'POST':
         form = AddConversationForm(request.POST)
-        if not form.is_valid():
-            error_message = form.errors
-        else:
+        if form.is_valid():
             now = datetime.datetime.now()
             root_msg = Message()
             root_msg.save()
@@ -209,7 +216,9 @@ def addconv(request):
                     root_message=root_msg
                 )
             conv.save()
+            form = AddConversationForm()
             error_message = 'Conversation started.'
     return render_to_response('addconv.html',
-            {'error_message': error_message},
+            {'error_message': error_message,
+             'form': form},
             context_instance=RequestContext(request))

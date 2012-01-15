@@ -21,14 +21,10 @@
         {% endif %}
 
         <form action="{% url hk.views.addheap %}" method="post">
-        {% csrf_token %}
-            <label for="author">Short name</label>
-            <input type="input" name="short_name" value="" />
-            <br />
-            <label for="parent">Long name</label>
-            <input type="input" name="long_name" value="" />
-            <br />
-            <!-- TODO: visibility, user rights -->
+            {% csrf_token %}
+            <table>
+                {{ form.as_table }}
+            </table>
             <input type="submit" value="Add heap" />
         </form>
     </body>

@@ -21,20 +21,10 @@
         {% endif %}
 
         <form action="{% url hk.views.editmessage msg_id %}" method="post">
-        {% csrf_token %}
-            <label for="author">Author ID</label>
-            <input type="input" name="author" value="{{ lv.author.id }}" />
-            <br />
-            <label for="parent">Parent ID</label>
-            <input type="input" name="parent" value="{{ lv.parent.id }}" />
-            <br />
-            <label for="creation_date">Message date</label>
-            <input type="input" name="creation_date" value="{{ cd }}" />
-            <br />
-            <label for="text">Message text</label>
-            <br />
-            <textarea name="text">{{ lv.text }}</textarea>
-            <br />
+            {% csrf_token %}
+            <table>
+                {{ form.as_table }}
+            </table>
             <input type="submit" value="Save message" />
         </form>
     </body>

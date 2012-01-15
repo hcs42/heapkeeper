@@ -21,11 +21,11 @@
         {% endif %}
 
         <form action="{% url hk.views.addmessage %}" method="post">
-        {% csrf_token %}
-        <table>
-          {{ form.as_table }}
-        </table>
-        <input type="submit" value="Add message" />
+            {% csrf_token %}
+            <table>
+                {{ form.as_table }}
+            </table>
+            <input type="submit" value="Add message" />
         </form>
     </body>
 <html>

@@ -1,16 +1,11 @@
-<html>
-    <head>
-        <title>
-            Heapkeeper
-        </title>
-        <style>
-            div.message { padding-left: 3em; }
-        </style>
-    </head>
-    <body>
-        <h1>
-            {{ heap.long_name }}
-        </h1>
+{% extends "base.html" %}
+{% block title %}
+{{ heap.long_name }}
+{% endblock %}
+{% block header %}
+{{ heap.long_name }}
+{% endblock %}
+{% block body %}
         <ul>
         {% for conv in convs %}
             <li>
@@ -23,5 +18,4 @@
         <a href="{% url hk.views.addconv %}">
             Start new conversation
         </a>
-    </body>
-<html>
+{% endblock %}

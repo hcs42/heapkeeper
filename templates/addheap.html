@@ -1,31 +1,9 @@
-<html>
-    <head>
-        <title>
-            Heapkeeper
-        </title>
-        <style>
-            div.message { padding-left: 3em; }
-        </style>
-    </head>
-    <body>
-        <h1>
-            Add new heap
-        </h1>
-
-        {% if error_message %}
-        <p>
-            <strong>
-                {{ error_message }}
-            </strong>
-        </p>
-        {% endif %}
-
-        <form action="{% url hk.views.addheap %}" method="post">
-            {% csrf_token %}
-            <table>
-                {{ form.as_table }}
-            </table>
-            <input type="submit" value="Add heap" />
-        </form>
-    </body>
-<html>
+{% extends "form.html" %}
+{% block title %}
+    Add heap
+{% endblock %}
+{% block header %}
+    Add new heap
+{% endblock %}
+{% block action %}{% url hk.views.addheap %}{% endblock %}
+{% block submittext%}Add heap{% endblock %}

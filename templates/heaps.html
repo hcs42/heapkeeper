@@ -1,16 +1,11 @@
-<html>
-    <head>
-        <title>
-            Heapkeeper
-        </title>
-        <style>
-            div.message { padding-left: 3em; }
-        </style>
-    </head>
-    <body>
-        <h1>
-            List of heaps
-        </h1>
+{% extends "base.html" %}
+{% block title %}
+    Heapkeeper - List of heaps
+{% endblock %}
+{% block header %}
+    List of heaps
+{% endblock %}
+{% block body %}
         <ul>
         {% for heap in heaps %}
             <li>
@@ -23,5 +18,4 @@
         <a href="{% url hk.views.addheap %}">
             Add new heap
         </a>
-    </body>
-<html>
+{% endblock %}

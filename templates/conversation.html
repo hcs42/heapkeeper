@@ -1,21 +1,15 @@
-<html>
-    <head>
-        <title>
-            Heapkeeper
-        </title>
-        <style>
-            div.message { padding-left: 3em; }
-        </style>
-    </head>
-    <body>
-        <h1>
-            {{ conv.subject }}
-        </h1>
+{% extends "base.html" %}
+{% block title %}
+    {{ conv.subject }}
+{% endblock %}
+{% block header %}
+    {{ conv.subject }}
+{% endblock %}
+{% block body %}
         <h2>
             {{ conv_labels }}
         </h2>
         <p>
             {{ l|safe }}
         </p>
-    </body>
-<html>
+{% endblock %}

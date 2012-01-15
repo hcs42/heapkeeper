@@ -1,31 +1,9 @@
-<html>
-    <head>
-        <title>
-            Heapkeeper
-        </title>
-        <style>
-            div.message { padding-left: 3em; }
-        </style>
-    </head>
-    <body>
-        <h1>
-           Edit message {{ msg_id }}
-        </h1>
-
-        {% if error_message %}
-        <p>
-            <strong>
-                {{ error_message }}
-            </strong>
-        </p>
-        {% endif %}
-
-        <form action="{% url hk.views.editmessage msg_id %}" method="post">
-            {% csrf_token %}
-            <table>
-                {{ form.as_table }}
-            </table>
-            <input type="submit" value="Save message" />
-        </form>
-    </body>
-<html>
+{% extends "form.html" %}
+{% block title %}
+    Edit message
+{% endblock %}
+{% block header %}
+    Edit message
+{% endblock %}
+{% block action %}{% url hk.views.editmessage msg_id %}{% endblock %}
+{% block submittext%}Save message{% endblock %}

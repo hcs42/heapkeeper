@@ -24,13 +24,7 @@ from django.core.urlresolvers import reverse
 from hk.models import Message, MessageVersion, Conversation, Heap
 import datetime
 
-def testgetmsg(request, msg_id):
-    message = get_object_or_404(Message, pk=msg_id)
-    latest_version = message.latest_version()
-    return render_to_response(
-            'testgetmsg.html',
-            {'msgv': latest_version}
-        )
+##### Helper functions 
 
 def format_labels(object):
     return '[%s]' % ', '.join([t.text for t in object.labels.all()])
@@ -49,6 +43,16 @@ def print_message(l, msg):
     for child in msg.get_children():
         print_message(l, child)
     l.append('</div>\n')
+
+##### Simple views
+
+def testgetmsg(request, msg_id):
+    message = get_object_or_404(Message, pk=msg_id)
+    latest_version = message.latest_version()
+    return render_to_response(
+            'testgetmsg.html',
+            {'msgv': latest_version}
+        )
 
 def conversation(request, conv_id):
     conv = get_object_or_404(Conversation, pk=conv_id)
@@ -77,115 +81,40 @@ def heaps(request):
             {'heaps': Heap.objects.all()}
         )
 
-class AddMessageForm(forms.Form):
-    parent = forms.IntegerField()
-    author = forms.IntegerField()
-    text = forms.CharField(widget=forms.Textarea())
+##### Generic framework for form-related views
 
-def addmessage(request):
-    error_message = ''
-    form = AddMessageForm()
-    if request.method == 'POST':
-        form = AddMessageForm(request.POST)
-        if form.is_valid():
-            # To create a message:
-            # - create a message object
-            # - create a related message version
-            now = datetime.datetime.now()
-            msg = Message()
-            msg.save()
-            mv = MessageVersion(
-                    message=Message.objects.get(id=msg.id),
-                    parent=Message.objects.get(id=form.cleaned_data['parent']),
-                    author=User.objects.get(id=form.cleaned_data['author']),
-                    creation_date=now,
-                    version_date=now,
-                    text=form.cleaned_data['text']
-                )
-            mv.save()
-            error_message = 'Message added.'
-            form = AddMessageForm()
-
-    return render_to_response('addmessage.html',
-            {'error_message': error_message,
-             'form': form},
-            context_instance=RequestContext(request))
-
-class EditMessageForm(forms.Form):
-    parent = forms.IntegerField(required=False)
-    author = forms.IntegerField()
-    creation_date = forms.DateTimeField()
-    text = forms.CharField(widget=forms.Textarea())
-
-
-def editmessage(request, msg_id):
-    error_message = ''
-    m = get_object_or_404(Message, pk=msg_id)
-    lv = m.latest_version()
-    # Initialize form to fields of latest version
-    form = EditMessageForm(initial=
+def make_view(form_class, initializer, creator, displayer):
+    def generic_view(request, obj_id=None):
+        variables = \
             {
-                'creation_date': lv.creation_date,
-                'author': lv.author_id,
-                'parent': lv.parent_id,
-                'text': lv.text
+                'request': request,
+                'error_message': '',
+                'obj_id': obj_id,
+                'form_class': form_class
             }
-        )
-    if request.method == 'POST':
-        form = EditMessageForm(request.POST)
-        if form.is_valid():
-            now = datetime.datetime.now()
-            try:
-                parent = Message.objects.get(id=form.cleaned_data['parent'])
-            except ObjectDoesNotExist:
-                parent = None
-            mv = MessageVersion(
-                    message=Message.objects.get(id=msg_id),
-                    parent=parent,
-                    author=User.objects.get(id=form.cleaned_data['author']),
-                    creation_date=form.cleaned_data['creation_date'],
-                    version_date=now,
-                    text=form.cleaned_data['text']
-                )
-            mv.save()
-            error_message = 'Message saved.'
-            root_msg = Message.objects.get(id=msg_id).get_root_message()
-            conv_id = Conversation.objects.get(root_message=root_msg).id
-            conv_url = reverse('hk.views.conversation', args=(conv_id,))
-            return redirect(
-                    '%s#message_%d' %
-                        (conv_url, int(msg_id))
-                )
+        initializer(variables)
+        variables['form'] = form_class(initial=variables.get('form_initial'))
+        if request.method == 'POST':
+            variables['form'] = form_class(request.POST)
+            if variables['form'].is_valid():
+                creator(variables)
+        return displayer(variables)
 
-    return render_to_response('editmessage.html',
-            {'error_message': error_message,
-             'form': form,
-             'msg_id': msg_id},
-            context_instance=RequestContext(request))
+    return generic_view
 
-class AddHeapForm(forms.Form):
-    short_name = forms.CharField()
-    long_name = forms.CharField()
+def make_displayer(template, template_vars):
+    def generic_displayer(variables):
+        template_dict = dict(zip(
+                            template_vars,
+                            [variables[tv] for tv in template_vars]
+                        ))
+        return render_to_response(template,
+                template_dict,
+                context_instance=RequestContext(variables['request']))
 
-def addheap(request):
-    error_message = ''
-    form = AddHeapForm()
-    if request.method == 'POST':
-        form = AddHeapForm(request.POST)
-        if form.is_valid():
-            heap = Heap(
-                    short_name=form.cleaned_data['short_name'],
-                    long_name=form.cleaned_data['long_name'],
-                    visibility=0
-                )
-            heap.save()
-            form = AddHeapForm()
-            error_message = 'Heap added.'
+    return generic_displayer
 
-    return render_to_response('addheap.html',
-            {'error_message': error_message,
-             'form': form},
-            context_instance=RequestContext(request))
+##### "Add conversation" view
 
 class AddConversationForm(forms.Form):
     heap = forms.IntegerField()
@@ -193,32 +122,142 @@ class AddConversationForm(forms.Form):
     subject = forms.CharField()
     text = forms.CharField(widget=forms.Textarea())
 
-def addconv(request):
-    error_message = ''
-    form = AddConversationForm()
-    if request.method == 'POST':
-        form = AddConversationForm(request.POST)
-        if form.is_valid():
-            now = datetime.datetime.now()
-            root_msg = Message()
-            root_msg.save()
-            mv = MessageVersion(
-                    message=Message.objects.get(id=root_msg.id),
-                    author=User.objects.get(id=form.cleaned_data['author']),
-                    creation_date=now,
-                    version_date=now,
-                    text=form.cleaned_data['text']
-                )
-            mv.save()
-            conv = Conversation(
-                    heap_id=int(form.cleaned_data['heap']),
-                    subject=form.cleaned_data['subject'],
-                    root_message=root_msg
-                )
-            conv.save()
-            form = AddConversationForm()
-            error_message = 'Conversation started.'
-    return render_to_response('addconv.html',
-            {'error_message': error_message,
-             'form': form},
-            context_instance=RequestContext(request))
+def addconv_creator(variables):
+    now = datetime.datetime.now()
+    root_msg = Message()
+    root_msg.save()
+    form = variables['form']
+    mv = MessageVersion(
+            message=Message.objects.get(id=root_msg.id),
+            author=User.objects.get(id=form.cleaned_data['author']),
+            creation_date=now,
+            version_date=now,
+            text=form.cleaned_data['text']
+        )
+    mv.save()
+    conv = Conversation(
+            heap_id=int(form.cleaned_data['heap']),
+            subject=form.cleaned_data['subject'],
+            root_message=root_msg
+        )
+    conv.save()
+    variables['form'] = variables['form_class']()
+    variables['error_message'] = 'Conversation started.'
+
+
+addconv = make_view(
+                AddConversationForm,
+                lambda x: None,
+                addconv_creator,
+                make_displayer('addconv.html', ('error_message', 'form'))
+            )
+
+##### "Add heap" view
+
+class AddHeapForm(forms.Form):
+    short_name = forms.CharField()
+    long_name = forms.CharField()
+
+def addheap_creator(variables):
+    form = variables['form']
+    heap = Heap(
+            short_name=form.cleaned_data['short_name'],
+            long_name=form.cleaned_data['long_name'],
+            visibility=0
+        )
+    heap.save()
+    variables['form'] = variables['form_class']()
+    variables['error_message'] = 'Heap added.'
+
+addheap = make_view(
+                AddHeapForm,
+                lambda x: None,
+                addheap_creator,
+                make_displayer('addheap.html', ('error_message', 'form'))
+            )
+
+##### "Add message" view
+
+class AddMessageForm(forms.Form):
+    parent = forms.IntegerField()
+    author = forms.IntegerField()
+    text = forms.CharField(widget=forms.Textarea())
+
+def addmessage_creator(variables):
+    now = datetime.datetime.now()
+    msg = Message()
+    msg.save()
+    form = variables['form']
+    mv = MessageVersion(
+            message=Message.objects.get(id=msg.id),
+            parent=Message.objects.get(id=form.cleaned_data['parent']),
+            author=User.objects.get(id=form.cleaned_data['author']),
+            creation_date=now,
+            version_date=now,
+            text=form.cleaned_data['text']
+        )
+    mv.save()
+    variables['form'] = variables['form_class']()
+    variables['error_message'] = 'Message added.'
+    form = AddMessageForm()
+
+
+addmessage = make_view(
+                AddMessageForm,
+                lambda x: None,
+                addmessage_creator,
+                make_displayer('addmessage.html', ('error_message', 'form'))
+            )
+
+##### "Edit message" view
+
+class EditMessageForm(forms.Form):
+    parent = forms.IntegerField(required=False)
+    author = forms.IntegerField()
+    creation_date = forms.DateTimeField()
+    text = forms.CharField(widget=forms.Textarea())
+
+def editmessage_init(variables):
+    m = get_object_or_404(Message, pk=variables['obj_id'])
+    lv = m.latest_version()
+    form_initial = {
+                'creation_date': lv.creation_date,
+                'author': lv.author_id,
+                'parent': lv.parent_id,
+                'text': lv.text
+            }
+    variables['m'] = m
+    variables['lv'] = lv
+    variables['form_initial'] = form_initial
+
+def editmessage_creator(variables):
+    now = datetime.datetime.now()
+    form = variables['form']
+    try:
+        parent = Message.objects.get(id=form.cleaned_data['parent'])
+    except ObjectDoesNotExist:
+        parent = None
+    mv = MessageVersion(
+            message=Message.objects.get(id=variables['obj_id']),
+            parent=parent,
+            author=User.objects.get(id=form.cleaned_data['author']),
+            creation_date=form.cleaned_data['creation_date'],
+            version_date=now,
+            text=form.cleaned_data['text']
+        )
+    mv.save()
+    variables['error_message'] = 'Message saved.'
+    root_msg = Message.objects.get(id=variables['obj_id']).get_root_message()
+    conv_id = Conversation.objects.get(root_message=root_msg).id
+    conv_url = reverse('hk.views.conversation', args=(conv_id,))
+    return redirect(
+            '%s#message_%d' %
+                (conv_url, int(variables['obj_id']))
+        )
+
+editmessage = make_view(
+                EditMessageForm,
+                editmessage_init,
+                editmessage_creator,
+                make_displayer('editmessage.html', ('error_message', 'form', 'obj_id'))
+            )

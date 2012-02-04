@@ -104,10 +104,7 @@ def make_view(form_class, initializer, creator, displayer):
 
 def make_displayer(template, template_vars):
     def generic_displayer(variables):
-        template_dict = dict(zip(
-                            template_vars,
-                            [variables[tv] for tv in template_vars]
-                        ))
+        template_dict = dict([(tv, variables[tv]) for tv in template_vars])
         return render_to_response(template,
                 template_dict,
                 context_instance=RequestContext(variables['request']))
@@ -136,7 +133,7 @@ def addconv_creator(variables):
         )
     mv.save()
     conv = Conversation(
-            heap_id=int(form.cleaned_data['heap']),
+            heap_id=form.cleaned_data['heap'],
             subject=form.cleaned_data['subject'],
             root_message=root_msg
         )

@@ -119,6 +119,12 @@ class AddConversationForm(forms.Form):
     subject = forms.CharField()
     text = forms.CharField(widget=forms.Textarea())
 
+def addconv_init(variables):
+    form_initial = {
+                'heap': variables['obj_id']
+            }
+    variables['form_initial'] = form_initial
+
 def addconv_creator(variables):
     now = datetime.datetime.now()
     root_msg = Message()
@@ -144,7 +150,7 @@ def addconv_creator(variables):
 
 addconv = make_view(
                 AddConversationForm,
-                lambda x: None,
+                addconv_init,
                 addconv_creator,
                 make_displayer('addconv.html', ('error_message', 'form'))
             )

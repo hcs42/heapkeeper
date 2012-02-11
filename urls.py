@@ -29,6 +29,7 @@ urlpatterns = patterns('hk.views',
     (r'^heap/$', 'heaps'),
     (r'^addmessage/$', 'addmessage'),
     (r'^addheap/$', 'addheap'),
+    (r'^addconv/(?P<obj_id>\d+)/$', 'addconv'),
     (r'^addconv/$', 'addconv'),
 )
 

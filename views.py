@@ -32,6 +32,7 @@ def format_labels(object):
 def print_message(l, msg):
     children = msg.get_children()
     edit_url = reverse('hk.views.editmessage', args=(msg.id,))
+    reply_url = reverse('hk.views.replymessage', args=(msg.id,))
     l.append("<div class='message'>\n")
     l.append("<a name='message_%d'></a>\n" % msg.id)
     l.append('<h3>\n&lt;%d&gt;\n</h3>\n' % msg.id)
@@ -39,6 +40,7 @@ def print_message(l, msg):
     l.append('<h3>\n%s\n</h3>\n' % format_labels(msg.latest_version()))
     l.append('<h3>\n%s\n</h3>\n' % msg.latest_version().creation_date)
     l.append("<a href='%s'>edit</a>\n" % edit_url)
+    l.append("<a href='%s'>reply</a>\n" % reply_url)
     l.append('<p>\n%s\n</p>\n' % msg.latest_version().text)
     for child in msg.get_children():
         print_message(l, child)
@@ -263,4 +265,39 @@ editmessage = make_view(
                 editmessage_init,
                 editmessage_creator,
                 make_displayer('editmessage.html', ('error_message', 'form', 'obj_id'))
+            )
+
+##### "Reply message" view
+
+class ReplyMessageForm(forms.Form):
+    author = forms.IntegerField()
+    text = forms.CharField(widget=forms.Textarea())
+
+def replymessage_init(variables):
+    parent = get_object_or_404(Message, pk=variables['obj_id'])
+    variables['parent'] = parent
+
+def replymessage_creator(variables):
+    now = datetime.datetime.now()
+    msg = Message()
+    msg.save()
+    form = variables['form']
+    mv = MessageVersion(
+            message=Message.objects.get(id=msg.id),
+            parent=variables['parent'],
+            author=User.objects.get(id=form.cleaned_data['author']),
+            creation_date=now,
+            version_date=now,
+            text=form.cleaned_data['text']
+        )
+    mv.save()
+    variables['form'] = variables['form_class']()
+    variables['error_message'] = 'Message added.'
+    form = AddMessageForm()
+
+replymessage = make_view(
+                ReplyMessageForm,
+                replymessage_init,
+                replymessage_creator,
+                make_displayer('replymessage.html', ('error_message', 'form', 'obj_id'))
             )

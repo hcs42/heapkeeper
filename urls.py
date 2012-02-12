@@ -24,6 +24,7 @@ from django.conf import settings
 urlpatterns = patterns('hk.views',
     (r'^testmessage/(?P<msg_id>\d+)/$', 'testgetmsg'),
     (r'^editmessage/(?P<obj_id>\d+)/$', 'editmessage'),
+    (r'^replymessage/(?P<obj_id>\d+)/$', 'replymessage'),
     (r'^conversation/(?P<conv_id>\d+)/$', 'conversation'),
     (r'^heap/(?P<heap_id>\d+)/$', 'heap'),
     (r'^heap/$', 'heaps'),

@@ -13,15 +13,17 @@
 # Heapkeeper.  If not, see <http://www.gnu.org/licenses/>.
 
 # Copyright (C) 2012 Attila Nagy
+# Copyright (C) 2012 Csaba Hoch
 
-from django.shortcuts import get_object_or_404, render_to_response, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.http import HttpResponseRedirect, HttpResponse
 from django.template import RequestContext
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
-from hk.models import Message, MessageVersion, Conversation, Heap
+import django.db
+from hk.models import Message, MessageVersion, Conversation, Heap, HkException
 import datetime
 
 ##### Helper functions 
@@ -51,7 +53,8 @@ def print_message(l, msg):
 def testgetmsg(request, msg_id):
     message = get_object_or_404(Message, pk=msg_id)
     latest_version = message.latest_version()
-    return render_to_response(
+    return render(
+            request,
             'testgetmsg.html',
             {'msgv': latest_version}
         )
@@ -62,7 +65,8 @@ def conversation(request, conv_id):
     l = []
     print_message(l, root)
     ls = [unicode(m) for m in l]
-    return render_to_response(
+    return render(
+            request,
             'conversation.html',
             {'conv': conv,
              'conv_labels': format_labels(conv),
@@ -72,14 +76,17 @@ def conversation(request, conv_id):
 def heap(request, heap_id):
     heap = get_object_or_404(Heap, pk=heap_id)
     convs = Conversation.objects.filter(heap=heap)
-    return render_to_response(
+    return render(
+            request,
             'heap.html',
             {'heap': heap,
              'convs': convs}
         )
 
 def heaps(request):
-    return render_to_response('heaps.html',
+    return render(
+            request,
+            'heaps.html',
             {'heaps': Heap.objects.all()}
         )
 
@@ -107,11 +114,100 @@ def make_view(form_class, initializer, creator, displayer):
 def make_displayer(template, template_vars):
     def generic_displayer(variables):
         template_dict = dict([(tv, variables[tv]) for tv in template_vars])
-        return render_to_response(template,
-                template_dict,
-                context_instance=RequestContext(variables['request']))
+        return render(
+                variables['request'],
+                template,
+                template_dict)
 
     return generic_displayer
+
+##### "Front page" view
+
+def front(request):
+    user = request.user
+    print user
+    if user.is_authenticated():
+        username = user.username
+    else:
+        username = None
+
+    return render(
+               request,
+               'front.html',
+               {'username': username})
+
+##### "Register" view
+
+def create_user(request, username, password1, password2, email_address,
+                captcha):
+
+    if captcha.strip() != '6':
+        raise HkException('Some fields are invalid.')
+    elif password1 != password2:
+        raise HkException('The two passwords do not match.')
+    #elif len(password1) < 6:
+    #    raise HkException('The password has to be at least 6 '
+    #                             'characters long!')
+    else:
+
+        try:
+            user = User.objects.create_user(username, email_address, password1)
+        except django.db.IntegrityError:
+            raise HkException('This username is already used.')
+
+        user.save()
+
+        # Should be 'messages.succes(request, 'text')
+        print 'Successful registration. Please log in!'
+
+        front_url = reverse('hk.views.front', args=[])
+        return HttpResponseRedirect(front_url)
+
+
+def register(request):
+
+    class RegisterForm(forms.Form):
+        username = forms.CharField(max_length=255,
+                                   label='Username')
+        password1 = forms.CharField(max_length=255,
+                                    widget=forms.PasswordInput,
+                                    label='Password')
+        password2 = forms.CharField(max_length=255,
+                                    widget=forms.PasswordInput,
+                                    label='Password again')
+        email = forms.CharField(max_length=255,
+                                        label='Email address')
+        c = forms.CharField(max_length=255,
+                            label='3 + 3 =')
+
+    if request.method == 'POST':
+        form = RegisterForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data['username']
+            password1 = form.cleaned_data['password1']
+            password2 = form.cleaned_data['password2']
+            email_address = form.cleaned_data['email']
+            captcha = form.cleaned_data['c']
+            try:
+                return create_user(request, username, password1, password2,
+                                   email_address, captcha)
+            except HkException, e:
+                # Should be 'messages.succes(request, 'text')
+                print e.value
+        else:
+            # Should be 'messages.succes(request, 'text')
+            print 'Some fields are invalid.'
+
+    elif request.method == 'GET':
+        form = RegisterForm()
+
+    else:
+        assert(False)
+
+    return render(
+               request,
+               'registration/register.html',
+               {'form':  form})
 
 ##### "Add conversation" view
 

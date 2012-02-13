@@ -13,6 +13,7 @@
 # Heapkeeper.  If not, see <http://www.gnu.org/licenses/>.
 
 # Copyright (C) 2012 Attila Nagy
+# Copyright (C) 2012 Csaba Hoch
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -133,3 +134,29 @@ class Conversation(models.Model):
                 self.subject,
             )
 
+class HkException(Exception):
+    """A very simple exception class used."""
+
+    def __init__(self, value):
+        """Constructor.
+
+        **Argument:**
+
+        - `value` (object) -- The reason of the error.
+        """
+        Exception.__init__(self)
+        self.value = value
+
+    def __unicode__(self):
+        """Returns the string representation of the error reason.
+
+        **Returns:** str
+        """
+
+        value = self.value
+        if isinstance(value, unicode):
+            return value
+        elif isinstance(value, str):
+            return unicode(value)
+        else:
+            return repr(value)

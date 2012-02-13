@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Front page
+{% endblock %}
+    
+{% block header %}
+    Heapkeeper
+{% endblock %}
+
+{% block body %}
+
+<!-- Interface for not logged in users -->
+
+{% if not user.is_authenticated %}
+
+<ul>
+  <li><a href="{% url login %}" >Log in</a></li>
+  <li><a href="{% url register %}" >Register</a></li>
+  <li><a href="{% url password_reset %}" >I forgot my password</a></li>
+</ul>
+
+<!-- Interface for logged in users -->
+
+{% else %}
+
+Welcome, {{ username }}!
+
+<ul>
+
+  <li> Heaps
+  <ul>
+
+    <!-- Listing heaps -->
+    <li>
+    My heaps: TODO
+    </li>
+
+    <li><a href="{% url addheap %}">Create new heap</a></li>
+    <li><a href="{% url addconv %}">Create new conversation</a></li>
+  </ul>
+  </li>
+
+  <li>My user
+  <ul>
+    <li><a href="{% url password_change %}">Change password</a></li>
+    <li><a href="{% url logout %}">Log out</a></li>
+  </ul>
+
+</ul>
+{% endif %} <!-- interface for logged in users -->
+
+{% endblock %}

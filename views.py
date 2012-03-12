@@ -76,11 +76,28 @@ def conversation(request, conv_id):
 def heap(request, heap_id):
     heap = get_object_or_404(Heap, pk=heap_id)
     convs = Conversation.objects.filter(heap=heap)
+    visibility = heap.get_visibility_display
+
+    # We do not display all userrights, only the effective ones, ie. the
+    # highest value for each name.
+    urights = []
+    for user in heap.users():
+        right = heap.get_effective_userright(user)
+        urights.append({
+                'name': user,
+                'verb': ('is'
+                    if right.get_right_display() == 'heapadmin'
+                    else 'can'),
+                'right': right.get_right_display()
+            })
+
     return render(
             request,
             'heap.html',
             {'heap': heap,
-             'convs': convs}
+             'visibility': visibility,
+             'convs': convs,
+             'urights': urights}
         )
 
 def heaps(request):

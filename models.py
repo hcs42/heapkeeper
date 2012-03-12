@@ -101,6 +101,16 @@ class Heap(models.Model):
                 self.short_name,
             )
 
+    def get_effective_userright(self, user):
+        highest = None
+        for uright in self.userright_set.filter(user=user):
+            if highest is None or uright.right > highest.right:
+                highest = uright
+        return highest
+
+    def users(self):
+        return list(set(self.user_fields.all()))
+
 
 class UserRight(models.Model):
     RIGHT_CHOICES = (

@@ -6,6 +6,21 @@
 {{ heap.long_name }}
 {% endblock %}
 {% block body %}
+        <div id="info">
+            <p>
+                Visibility: {{ visibility }}
+            </p>
+            <p>
+                User rights:
+            </p>
+            <ul>
+            {% for uright in urights %}
+                <li>
+                    {{ uright.name }} {{ uright.verb }} {{ uright.right }}
+                </li>
+            {% endfor %}
+            </ul>
+        </div>
         <ul>
         {% for conv in convs %}
             <li>

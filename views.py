@@ -125,7 +125,6 @@ def make_displayer(template, template_vars):
 
 def front(request):
     user = request.user
-    print user
     if user.is_authenticated():
         username = user.username
     else:

@@ -20,7 +20,7 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.template import RequestContext
 from django import forms
 from django.contrib.auth.models import User
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.urlresolvers import reverse
 import django.db
 from hk.models import Message, MessageVersion, Conversation, Heap, HkException
@@ -53,6 +53,7 @@ def print_message(l, msg):
 def testgetmsg(request, msg_id):
     message = get_object_or_404(Message, pk=msg_id)
     latest_version = message.latest_version()
+    message.get_heap().check_access(request.user, 0)
     return render(
             request,
             'testgetmsg.html',
@@ -61,6 +62,7 @@ def testgetmsg(request, msg_id):
 
 def conversation(request, conv_id):
     conv = get_object_or_404(Conversation, pk=conv_id)
+    conv.heap.check_access(request.user, 0)
     root = conv.root_message
     l = []
     print_message(l, root)
@@ -75,6 +77,7 @@ def conversation(request, conv_id):
 
 def heap(request, heap_id):
     heap = get_object_or_404(Heap, pk=heap_id)
+    heap.check_access(request.user, 0)
     convs = Conversation.objects.filter(heap=heap)
     visibility = heap.get_visibility_display
 
@@ -86,9 +89,9 @@ def heap(request, heap_id):
         urights.append({
                 'name': user,
                 'verb': ('is'
-                    if right.get_right_display() == 'heapadmin'
+                    if right == '3'
                     else 'can'),
-                'right': right.get_right_display()
+                'right': right
             })
 
     return render(
@@ -101,6 +104,8 @@ def heap(request, heap_id):
         )
 
 def heaps(request):
+    # TODO: special access control needed: do not even display heaps
+    # for which the user does not have at least read access.
     return render(
             request,
             'heaps.html',
@@ -109,7 +114,9 @@ def heaps(request):
 
 ##### Generic framework for form-related views
 
-def make_view(form_class, initializer, creator, displayer):
+def make_view(form_class, initializer, creator, displayer,
+              creation_access_controller=None,
+              display_access_controller=None):
     def generic_view(request, obj_id=None):
         variables = \
             {
@@ -119,10 +126,14 @@ def make_view(form_class, initializer, creator, displayer):
                 'form_class': form_class
             }
         initializer(variables)
+        if display_access_controller is not None:
+            display_access_controller(variables)
         variables['form'] = form_class(initial=variables.get('form_initial'))
         if request.method == 'POST':
             variables['form'] = form_class(request.POST)
             if variables['form'].is_valid():
+                if creation_access_controller is not None:
+                    creation_access_controller(variables)
                 creator(variables)
         return displayer(variables)
 
@@ -239,6 +250,17 @@ def addconv_init(variables):
             }
     variables['form_initial'] = form_initial
 
+def addconv_creation_access_controller(variables):
+    form = variables['form']
+    heap = Heap.objects.get(pk=form.cleaned_data['heap'])
+    # Needs alter level if user wants to start conversation in someone
+    # else's name
+    if variables['request'].user.id != form.cleaned_data['author']:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
+
 def addconv_creator(variables):
     now = datetime.datetime.now()
     root_msg = Message()
@@ -266,11 +288,13 @@ addconv = make_view(
                 AddConversationForm,
                 addconv_init,
                 addconv_creator,
-                make_displayer('addconv.html', ('error_message', 'form'))
+                make_displayer('addconv.html', ('error_message', 'form')),
+                addconv_creation_access_controller
             )
 
 ##### "Add heap" view
 
+# TODO: user has to be non-anonymous to add heaps
 class AddHeapForm(forms.Form):
     short_name = forms.CharField()
     long_name = forms.CharField()
@@ -286,11 +310,17 @@ def addheap_creator(variables):
     variables['form'] = variables['form_class']()
     variables['error_message'] = 'Heap added.'
 
+def addheap_access_controller(variables):
+    if variables['request'].user.is_anonymous():
+        raise PermissionDenied
+
 addheap = make_view(
                 AddHeapForm,
                 lambda x: None,
                 addheap_creator,
-                make_displayer('addheap.html', ('error_message', 'form'))
+                make_displayer('addheap.html', ('error_message', 'form')),
+                addheap_access_controller,
+                addheap_access_controller
             )
 
 ##### "Add message" view
@@ -299,6 +329,16 @@ class AddMessageForm(forms.Form):
     parent = forms.IntegerField()
     author = forms.IntegerField()
     text = forms.CharField(widget=forms.Textarea())
+
+def addmessage_creation_access_controller(variables):
+    form = variables['form']
+    parent = Message.objects.get(pk=form.cleaned_data['parent'])
+    heap = parent.get_heap()
+    if variables['request'].user.id != form.cleaned_data['author']:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
 
 def addmessage_creator(variables):
     now = datetime.datetime.now()
@@ -323,7 +363,8 @@ addmessage = make_view(
                 AddMessageForm,
                 lambda x: None,
                 addmessage_creator,
-                make_displayer('addmessage.html', ('error_message', 'form'))
+                make_displayer('addmessage.html', ('error_message', 'form')),
+                addmessage_creation_access_controller
             )
 
 ##### "Edit message" view
@@ -333,6 +374,30 @@ class EditMessageForm(forms.Form):
     author = forms.IntegerField()
     creation_date = forms.DateTimeField()
     text = forms.CharField(widget=forms.Textarea())
+
+def editmessage_creation_access_controller(variables):
+    form = variables['form']
+    heap = variables['m'].get_heap()
+    user = variables['request'].user
+    msg = variables['m']
+    # Editing someone else's post and giving a post to someone else
+    # both require alter rights
+    if user.id != msg.latest_version().author.id \
+        or user.id != form.cleaned_data['author']:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
+
+def editmessage_display_access_controller(variables):
+    heap = variables['m'].get_heap()
+    user = variables['request'].user
+    msg = variables['m']
+    if user.id != msg.latest_version().author.id:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
 
 def editmessage_init(variables):
     m = get_object_or_404(Message, pk=variables['obj_id'])
@@ -376,7 +441,9 @@ editmessage = make_view(
                 EditMessageForm,
                 editmessage_init,
                 editmessage_creator,
-                make_displayer('editmessage.html', ('error_message', 'form', 'obj_id'))
+                make_displayer('editmessage.html', ('error_message', 'form', 'obj_id')),
+                editmessage_creation_access_controller,
+                editmessage_display_access_controller
             )
 
 ##### "Reply message" view
@@ -388,6 +455,20 @@ class ReplyMessageForm(forms.Form):
 def replymessage_init(variables):
     parent = get_object_or_404(Message, pk=variables['obj_id'])
     variables['parent'] = parent
+
+def replymessage_display_access_controller(variables):
+    parent = variables['parent']
+    parent.get_heap().check_access(variables['request'].user, 1)
+
+def replymessage_creation_access_controller(variables):
+    parent = variables['parent']
+    user = variables['request'].user
+    if user.id != variables['form'].cleaned_data['author']:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    parent.get_heap().check_access(variables['request'].user,
+                                   needed_level)
 
 def replymessage_creator(variables):
     now = datetime.datetime.now()
@@ -411,5 +492,7 @@ replymessage = make_view(
                 ReplyMessageForm,
                 replymessage_init,
                 replymessage_creator,
-                make_displayer('replymessage.html', ('error_message', 'form', 'obj_id'))
+                make_displayer('replymessage.html', ('error_message', 'form', 'obj_id')),
+                replymessage_creation_access_controller,
+                replymessage_display_access_controller
             )

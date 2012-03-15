@@ -116,13 +116,13 @@ class Heap(models.Model):
                 % self.get_effective_userright(user)
         print 'user is%s superuser' \
                 % (' not' if not user.is_superuser else '')
-        if not user.is_superuser and \
-            self.get_effective_userright(user) < level_needed:
+        if self.get_effective_userright(user) < level_needed:
             raise PermissionDenied
 
     def get_given_userright(self, user):
         # This is the right actually assigned to the user via a UserRight
-        # object. The visibility of the heap is not taken into account.
+        # object. The visibility of the heap and superuser status is not taken
+        # into account.
         if not user.is_authenticated():
             return -1
         highest = None
@@ -132,6 +132,9 @@ class Heap(models.Model):
         return highest.right if highest is not None else -1
 
     def get_effective_userright(self, user):
+        # Superusers are heapadmins on all heaps
+        if user.is_superuser:
+            return 3
         given_right = self.get_given_userright(user)
         visibility = self.visibility
         visibility_rights_dict = \

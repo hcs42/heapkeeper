@@ -146,6 +146,9 @@ class Heap(models.Model):
         visibility_right = visibility_rights_dict[visibility]
         return max(given_right, visibility_right)
 
+    def is_visible_for(self, user):
+        return self.get_effective_userright(user) >= 0
+
     def users(self):
         return list(set(self.user_fields.all()))
 

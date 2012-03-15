@@ -32,10 +32,13 @@ Welcome, {{ username }}!
   <ul>
 
     <!-- Listing heaps -->
-    <li>
-    My heaps: TODO
-    </li>
-
+    {% for heap in heaps %}
+        <li>
+            <a href="{% url hk.views.heap heap.id %}">
+                {{ heap.long_name }}
+            </a>
+        </li>
+    {% endfor %}
     <li><a href="{% url addheap %}">Create new heap</a></li>
     <li><a href="{% url addconv %}">Create new conversation</a></li>
   </ul>

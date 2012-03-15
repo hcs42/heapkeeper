@@ -104,12 +104,12 @@ def heap(request, heap_id):
         )
 
 def heaps(request):
-    # TODO: special access control needed: do not even display heaps
-    # for which the user does not have at least read access.
+    heaps = [heap for heap in Heap.objects.all()
+                if heap.is_visible_for(request.user)]
     return render(
             request,
             'heaps.html',
-            {'heaps': Heap.objects.all()}
+            {'heaps': heaps}
         )
 
 ##### Generic framework for form-related views
@@ -157,11 +157,13 @@ def front(request):
         username = user.username
     else:
         username = None
-
+    heaps = [heap for heap in Heap.objects.all()
+                if heap.is_visible_for(user)]
     return render(
                request,
                'front.html',
-               {'username': username})
+               {'username': username,
+                'heaps': heaps})
 
 ##### "Register" view
 

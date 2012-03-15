@@ -23,7 +23,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.urlresolvers import reverse
 import django.db
-from hk.models import Message, MessageVersion, Conversation, Heap, HkException
+from hk.models import *
 import datetime
 
 ##### Helper functions 
@@ -89,10 +89,18 @@ def heap(request, heap_id):
         urights.append({
                 'name': user,
                 'verb': ('is'
-                    if right == '3'
+                    if right == 3
                     else 'can'),
-                'right': right
+                'right': UserRight.get_right_text(right)
             })
+    # For (semi)public heaps, display right granted to 'everyone else'
+    if heap.visibility < 2:
+        right = 1 if heap.visibility == 0 else 0
+        urights.append({
+                'name': 'everyone else',
+                # Anon is never heapadmin, so verb is always 'can'
+                'verb': 'can',
+                'right': UserRight.get_right_text(right)})
 
     return render(
             request,

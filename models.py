@@ -172,6 +172,11 @@ class UserRight(models.Model):
                 self.get_right_display(),
             )
 
+    @classmethod
+    def get_right_text(self, right):
+        return [text for num, text in self.RIGHT_CHOICES
+            if num==right][0]
+
 
 class Conversation(models.Model):
     subject = models.CharField(max_length=256) 

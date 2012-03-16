@@ -110,12 +110,6 @@ class Heap(models.Model):
             )
 
     def check_access(self, user, level_needed):
-        print 'user %d is trying to perform action with needed level %d' \
-                % (user.id, level_needed)
-        print 'effective user right: %d' \
-                % self.get_effective_userright(user)
-        print 'user is%s superuser' \
-                % (' not' if not user.is_superuser else '')
         if self.get_effective_userright(user) < level_needed:
             raise PermissionDenied
 

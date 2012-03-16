@@ -99,6 +99,7 @@ def heap(request, heap_id):
     if heap.visibility < 2:
         right = 1 if heap.visibility == 0 else 0
         urights.append({
+                'uid': -1,
                 'name': 'everyone' if len(urights) == 0 \
                     else 'everyone else',
                 # Anon is never heapadmin, so verb is always 'can'
@@ -468,12 +469,16 @@ editmessage = make_view(
 ##### "Reply message" view
 
 class ReplyMessageForm(forms.Form):
-    author = forms.IntegerField()
+    #author = forms.IntegerField()
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     text = forms.CharField(widget=forms.Textarea())
 
 def replymessage_init(variables):
     parent = get_object_or_404(Message, pk=variables['obj_id'])
     variables['parent'] = parent
+    variables['form_initial'] = {
+            'author': variables['request'].user
+        }
 
 def replymessage_display_access_controller(variables):
     parent = variables['parent']

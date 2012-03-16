@@ -17,7 +17,7 @@
             {% for uright in urights %}
                 <li>
                     {{ uright.name }} {{ uright.verb }} {{ uright.right }}
-                    {% if heapadmin %}
+                    {% if heapadmin and uright.uid != -1 %}
                         <a href="{% url deleteright uright.uid heap.id %}">
                             delete
                         </a>

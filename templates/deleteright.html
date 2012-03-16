@@ -1,0 +1,9 @@
+{% extends "form.html" %}
+{% block title %}
+    Remove user right from heap
+{% endblock %}
+{% block header %}
+    Remove user right from heap
+{% endblock %}
+{% block action %}{% url hk.views.deleteright obj_id obj2_id %}{% endblock %}
+{% block submittext%}Remove user right{% endblock %}

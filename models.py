@@ -18,6 +18,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core import urlresolvers
+from django.core.exceptions import PermissionDenied
 
 class Message(models.Model):
     users_have_read = models.ManyToManyField(User, null=True, blank=True)
@@ -55,6 +56,13 @@ class Message(models.Model):
             if latest_parent is None:
                 return msg
             msg = latest_parent
+
+    def get_conversation(self):
+        root_message = self.get_root_message
+        return Conversation.objects.get(root_message=root_message)
+
+    def get_heap(self):
+        return self.get_conversation().heap
 
     def get_children(self):
         return [m for m in Message.objects.all() if m.current_parent() == self]
@@ -101,6 +109,43 @@ class Heap(models.Model):
                 self.short_name,
             )
 
+    def check_access(self, user, level_needed):
+        if self.get_effective_userright(user) < level_needed:
+            raise PermissionDenied
+
+    def get_given_userright(self, user):
+        # This is the right actually assigned to the user via a UserRight
+        # object. The visibility of the heap and superuser status is not taken
+        # into account.
+        if not user.is_authenticated():
+            return -1
+        highest = None
+        for uright in self.userright_set.filter(user=user):
+            if highest is None or uright.right > highest.right:
+                highest = uright
+        return highest.right if highest is not None else -1
+
+    def get_effective_userright(self, user):
+        # Superusers are heapadmins on all heaps
+        if user.is_superuser:
+            return 3
+        given_right = self.get_given_userright(user)
+        visibility = self.visibility
+        visibility_rights_dict = \
+            {
+                0: 1, # Public heaps can at least be sent to,
+                1: 0, # Semipublic heaps cat at least be read,
+                2: -1 # Private heaps give no rights to anyone.
+            }
+        visibility_right = visibility_rights_dict[visibility]
+        return max(given_right, visibility_right)
+
+    def is_visible_for(self, user):
+        return self.get_effective_userright(user) >= 0
+
+    def users(self):
+        return list(set(self.user_fields.all()))
+
 
 class UserRight(models.Model):
     RIGHT_CHOICES = (
@@ -120,6 +165,11 @@ class UserRight(models.Model):
                 self.user,
                 self.get_right_display(),
             )
+
+    @classmethod
+    def get_right_text(self, right):
+        return [text for num, text in self.RIGHT_CHOICES
+            if num==right][0]
 
 
 class Conversation(models.Model):

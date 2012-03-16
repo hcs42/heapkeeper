@@ -6,6 +6,33 @@
 {{ heap.long_name }}
 {% endblock %}
 {% block body %}
+        <div id="info">
+            <p>
+                Visibility: {{ visibility }}
+            </p>
+            <p>
+                User rights:
+            </p>
+            <ul>
+            {% for uright in urights %}
+                <li>
+                    {{ uright.name }} {{ uright.verb }} {{ uright.right }}
+                    {% if heapadmin and uright.uid != -1 %}
+                        <a href="{% url deleteright uright.uid heap.id %}">
+                            delete
+                        </a>
+                    {% endif %}
+                </li>
+            {% endfor %}
+            {% if heapadmin %}
+                <li>
+                    <a href="{% url addright heap.id %}">
+                        Add user right
+                    </a>
+                </li>
+            {% endif %}
+            </ul>
+        </div>
         <ul>
         {% for conv in convs %}
             <li>

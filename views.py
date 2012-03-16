@@ -20,10 +20,10 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.template import RequestContext
 from django import forms
 from django.contrib.auth.models import User
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.urlresolvers import reverse
 import django.db
-from hk.models import Message, MessageVersion, Conversation, Heap, HkException
+from hk.models import *
 import datetime
 
 ##### Helper functions 
@@ -53,6 +53,7 @@ def print_message(l, msg):
 def testgetmsg(request, msg_id):
     message = get_object_or_404(Message, pk=msg_id)
     latest_version = message.latest_version()
+    message.get_heap().check_access(request.user, 0)
     return render(
             request,
             'testgetmsg.html',
@@ -61,6 +62,7 @@ def testgetmsg(request, msg_id):
 
 def conversation(request, conv_id):
     conv = get_object_or_404(Conversation, pk=conv_id)
+    conv.heap.check_access(request.user, 0)
     root = conv.root_message
     l = []
     print_message(l, root)
@@ -75,38 +77,82 @@ def conversation(request, conv_id):
 
 def heap(request, heap_id):
     heap = get_object_or_404(Heap, pk=heap_id)
+    heap.check_access(request.user, 0)
+    heapadmin = heap.get_effective_userright(request.user) == 3
     convs = Conversation.objects.filter(heap=heap)
+    visibility = heap.get_visibility_display
+
+    # We do not display all userrights, only the effective ones, ie. the
+    # highest value for each name.
+    urights = []
+    for user in heap.users():
+        right = heap.get_effective_userright(user)
+        urights.append({
+                'uid': user.id,
+                'name': user,
+                'verb': ('is'
+                    if right == 3
+                    else 'can'),
+                'right': UserRight.get_right_text(right),
+            })
+    # For (semi)public heaps, display right granted to 'everyone else'
+    if heap.visibility < 2:
+        right = 1 if heap.visibility == 0 else 0
+        urights.append({
+                'uid': -1,
+                'name': 'everyone' if len(urights) == 0 \
+                    else 'everyone else',
+                # Anon is never heapadmin, so verb is always 'can'
+                'verb': 'can',
+                'right': UserRight.get_right_text(right),
+                'controls': ''})
+
     return render(
             request,
             'heap.html',
             {'heap': heap,
-             'convs': convs}
+             'visibility': visibility,
+             'convs': convs,
+             'urights': urights,
+             'heapadmin': heapadmin}
         )
 
 def heaps(request):
+    heaps = [heap for heap in Heap.objects.all()
+                if heap.is_visible_for(request.user)]
     return render(
             request,
             'heaps.html',
-            {'heaps': Heap.objects.all()}
+            {'heaps': heaps}
         )
 
 ##### Generic framework for form-related views
 
-def make_view(form_class, initializer, creator, displayer):
-    def generic_view(request, obj_id=None):
+def make_view(form_class, initializer, creator, displayer,
+              creation_access_controller=None,
+              display_access_controller=None):
+    def generic_view(request, obj_id=None, obj2_id=None):
         variables = \
             {
                 'request': request,
                 'error_message': '',
                 'obj_id': obj_id,
+                'obj2_id': obj2_id,
                 'form_class': form_class
             }
         initializer(variables)
+        if display_access_controller is not None:
+            display_access_controller(variables)
         variables['form'] = form_class(initial=variables.get('form_initial'))
         if request.method == 'POST':
             variables['form'] = form_class(request.POST)
             if variables['form'].is_valid():
-                creator(variables)
+                if creation_access_controller is not None:
+                    creation_access_controller(variables)
+                # If the creator returns anything, it is a redirect
+                res = creator(variables)
+                if res is not None:
+                    return res
         return displayer(variables)
 
     return generic_view
@@ -125,16 +171,17 @@ def make_displayer(template, template_vars):
 
 def front(request):
     user = request.user
-    print user
     if user.is_authenticated():
         username = user.username
     else:
         username = None
-
+    heaps = [heap for heap in Heap.objects.all()
+                if heap.is_visible_for(user)]
     return render(
                request,
                'front.html',
-               {'username': username})
+               {'username': username,
+                'heaps': heaps})
 
 ##### "Register" view
 
@@ -212,16 +259,28 @@ def register(request):
 ##### "Add conversation" view
 
 class AddConversationForm(forms.Form):
-    heap = forms.IntegerField()
-    author = forms.IntegerField()
+    heap = forms.ModelChoiceField(queryset=Heap.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     subject = forms.CharField()
     text = forms.CharField(widget=forms.Textarea())
 
 def addconv_init(variables):
     form_initial = {
-                'heap': variables['obj_id']
+                'heap': variables['obj_id'],
+                'author': variables['request'].user
             }
     variables['form_initial'] = form_initial
+
+def addconv_creation_access_controller(variables):
+    form = variables['form']
+    heap = form.cleaned_data['heap']
+    # Needs alter level if user wants to start conversation in someone
+    # else's name
+    if variables['request'].user.id != form.cleaned_data['author'].id:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
 
 def addconv_creator(variables):
     now = datetime.datetime.now()
@@ -230,14 +289,14 @@ def addconv_creator(variables):
     form = variables['form']
     mv = MessageVersion(
             message=Message.objects.get(id=root_msg.id),
-            author=User.objects.get(id=form.cleaned_data['author']),
+            author=form.cleaned_data['author'],
             creation_date=now,
             version_date=now,
             text=form.cleaned_data['text']
         )
     mv.save()
     conv = Conversation(
-            heap_id=form.cleaned_data['heap'],
+            heap=form.cleaned_data['heap'],
             subject=form.cleaned_data['subject'],
             root_message=root_msg
         )
@@ -250,11 +309,13 @@ addconv = make_view(
                 AddConversationForm,
                 addconv_init,
                 addconv_creator,
-                make_displayer('addconv.html', ('error_message', 'form'))
+                make_displayer('addconv.html', ('error_message', 'form')),
+                addconv_creation_access_controller
             )
 
 ##### "Add heap" view
 
+# TODO: user has to be non-anonymous to add heaps
 class AddHeapForm(forms.Form):
     short_name = forms.CharField()
     long_name = forms.CharField()
@@ -270,19 +331,41 @@ def addheap_creator(variables):
     variables['form'] = variables['form_class']()
     variables['error_message'] = 'Heap added.'
 
+def addheap_access_controller(variables):
+    if variables['request'].user.is_anonymous():
+        raise PermissionDenied
+
 addheap = make_view(
                 AddHeapForm,
                 lambda x: None,
                 addheap_creator,
-                make_displayer('addheap.html', ('error_message', 'form'))
+                make_displayer('addheap.html', ('error_message', 'form')),
+                addheap_access_controller,
+                addheap_access_controller
             )
 
 ##### "Add message" view
 
 class AddMessageForm(forms.Form):
-    parent = forms.IntegerField()
-    author = forms.IntegerField()
+    parent = forms.ModelChoiceField(queryset=Message.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     text = forms.CharField(widget=forms.Textarea())
+
+def addmessage_creation_access_controller(variables):
+    form = variables['form']
+    parent = form.cleaned_data['parent']
+    heap = parent.get_heap()
+    if variables['request'].user.id != form.cleaned_data['author'].id:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
+
+def addmessage_init(variables):
+    variables['form_initial'] = {
+            'author': variables['request'].user
+        }
+
 
 def addmessage_creator(variables):
     now = datetime.datetime.now()
@@ -291,8 +374,8 @@ def addmessage_creator(variables):
     form = variables['form']
     mv = MessageVersion(
             message=Message.objects.get(id=msg.id),
-            parent=Message.objects.get(id=form.cleaned_data['parent']),
-            author=User.objects.get(id=form.cleaned_data['author']),
+            parent=form.cleaned_data['parent'],
+            author=form.cleaned_data['author'],
             creation_date=now,
             version_date=now,
             text=form.cleaned_data['text']
@@ -305,26 +388,51 @@ def addmessage_creator(variables):
 
 addmessage = make_view(
                 AddMessageForm,
-                lambda x: None,
+                addmessage_init,
                 addmessage_creator,
-                make_displayer('addmessage.html', ('error_message', 'form'))
+                make_displayer('addmessage.html', ('error_message', 'form')),
+                addmessage_creation_access_controller
             )
 
 ##### "Edit message" view
 
 class EditMessageForm(forms.Form):
-    parent = forms.IntegerField(required=False)
-    author = forms.IntegerField()
+    parent = forms.ModelChoiceField(queryset=Message.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     creation_date = forms.DateTimeField()
     text = forms.CharField(widget=forms.Textarea())
+
+def editmessage_creation_access_controller(variables):
+    form = variables['form']
+    heap = variables['m'].get_heap()
+    user = variables['request'].user
+    msg = variables['m']
+    # Editing someone else's post and giving a post to someone else
+    # both require alter rights
+    if user.id != msg.latest_version().author.id \
+        or user.id != form.cleaned_data['author']:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
+
+def editmessage_display_access_controller(variables):
+    heap = variables['m'].get_heap()
+    user = variables['request'].user
+    msg = variables['m']
+    if user.id != msg.latest_version().author.id:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
 
 def editmessage_init(variables):
     m = get_object_or_404(Message, pk=variables['obj_id'])
     lv = m.latest_version()
     form_initial = {
                 'creation_date': lv.creation_date,
-                'author': lv.author_id,
-                'parent': lv.parent_id,
+                'author': lv.author,
+                'parent': lv.parent,
                 'text': lv.text
             }
     variables['m'] = m
@@ -335,13 +443,13 @@ def editmessage_creator(variables):
     now = datetime.datetime.now()
     form = variables['form']
     try:
-        parent = Message.objects.get(id=form.cleaned_data['parent'])
+        parent = form.cleaned_data['parent']
     except ObjectDoesNotExist:
         parent = None
     mv = MessageVersion(
             message=Message.objects.get(id=variables['obj_id']),
             parent=parent,
-            author=User.objects.get(id=form.cleaned_data['author']),
+            author=form.cleaned_data['author'],
             creation_date=form.cleaned_data['creation_date'],
             version_date=now,
             text=form.cleaned_data['text']
@@ -360,18 +468,37 @@ editmessage = make_view(
                 EditMessageForm,
                 editmessage_init,
                 editmessage_creator,
-                make_displayer('editmessage.html', ('error_message', 'form', 'obj_id'))
+                make_displayer('editmessage.html', ('error_message', 'form', 'obj_id')),
+                editmessage_creation_access_controller,
+                editmessage_display_access_controller
             )
 
 ##### "Reply message" view
 
 class ReplyMessageForm(forms.Form):
-    author = forms.IntegerField()
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     text = forms.CharField(widget=forms.Textarea())
 
 def replymessage_init(variables):
     parent = get_object_or_404(Message, pk=variables['obj_id'])
     variables['parent'] = parent
+    variables['form_initial'] = {
+            'author': variables['request'].user
+        }
+
+def replymessage_display_access_controller(variables):
+    parent = variables['parent']
+    parent.get_heap().check_access(variables['request'].user, 1)
+
+def replymessage_creation_access_controller(variables):
+    parent = variables['parent']
+    user = variables['request'].user
+    if user.id != variables['form'].cleaned_data['author'].id:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    parent.get_heap().check_access(variables['request'].user,
+                                   needed_level)
 
 def replymessage_creator(variables):
     now = datetime.datetime.now()
@@ -381,7 +508,7 @@ def replymessage_creator(variables):
     mv = MessageVersion(
             message=Message.objects.get(id=msg.id),
             parent=variables['parent'],
-            author=User.objects.get(id=form.cleaned_data['author']),
+            author=form.cleaned_data['author'],
             creation_date=now,
             version_date=now,
             text=form.cleaned_data['text']
@@ -395,5 +522,83 @@ replymessage = make_view(
                 ReplyMessageForm,
                 replymessage_init,
                 replymessage_creator,
-                make_displayer('replymessage.html', ('error_message', 'form', 'obj_id'))
+                make_displayer('replymessage.html', ('error_message', 'form', 'obj_id')),
+                replymessage_creation_access_controller,
+                replymessage_display_access_controller
+            )
+
+##### "Delete right" view
+
+class DeleteRightConfirmForm(forms.Form):
+    really_revoke_right = forms.BooleanField()
+
+def deleteright_init(variables):
+    target_user = get_object_or_404(User, pk=variables['obj_id'])
+    variables['target_user'] = target_user
+    heap = get_object_or_404(Heap, pk=variables['obj2_id'])
+    variables['heap'] = heap
+
+def deleteright_access_controller(variables):
+    variables['heap'].check_access(variables['request'].user, 3)
+
+def deleteright_creator(variables):
+    if variables['form'].cleaned_data['really_revoke_right']:
+        heap = variables['heap']
+        target_user = variables['target_user']
+        print 'revoking rights from user %d on heap %d' % (
+                variables['target_user'].id,
+                heap.id,
+            )
+        affected_rights = heap.userright_set.filter(user=target_user)
+        print 'affected rights: %s' % affected_rights
+        affected_rights.delete()
+        return redirect(reverse('hk.views.heap', args=(heap.id,)))
+
+deleteright = make_view(
+                DeleteRightConfirmForm,
+                deleteright_init,
+                deleteright_creator,
+                make_displayer('deleteright.html',
+                    ('error_message', 'form', 'obj_id', 'obj2_id')),
+                deleteright_access_controller,
+                deleteright_access_controller
+            )
+
+##### "Add right" view
+
+class AddRightForm(forms.ModelForm):
+    class Meta:
+        model = UserRight
+        exclude = ('heap',)
+
+def addright_init(variables):
+    heap = get_object_or_404(Heap, pk=variables['obj_id'])
+    variables['heap'] = heap
+
+def addright_creator(variables):
+    heap = variables['heap']
+    target_user = variables['form'].cleaned_data['user']
+    given_right_now = heap.get_given_userright(target_user)
+    target_right = variables['form'].cleaned_data['right']
+    if target_right < given_right_now:
+        variables['error_message'] = 'User already has higher privileges.'
+        return
+    if given_right_now != -1:
+        heap.userright_set.filter(user=target_user).delete()  
+    new_ur = UserRight(heap=heap, user=target_user,
+                        right=target_right)
+    new_ur.save()
+    variables['error_message'] = 'OKOKOKOK'
+    return redirect(reverse('hk.views.heap', args=(heap.id,)))
+
+addright_access_controller = deleteright_access_controller
+ 
+addright = make_view(
+                AddRightForm,
+                addright_init,
+                addright_creator,
+                make_displayer('addright.html',
+                    ('error_message', 'form', 'obj_id')),
+                addright_access_controller,
+                addright_access_controller
             )

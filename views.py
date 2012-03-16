@@ -273,10 +273,10 @@ def addconv_init(variables):
 
 def addconv_creation_access_controller(variables):
     form = variables['form']
-    heap = Heap.objects.get(pk=form.cleaned_data['heap'])
+    heap = form.cleaned_data['heap']
     # Needs alter level if user wants to start conversation in someone
     # else's name
-    if variables['request'].user.id != form.cleaned_data['author']:
+    if variables['request'].user.id != form.cleaned_data['author'].id:
         needed_level = 2 
     else:
         needed_level = 1
@@ -289,14 +289,14 @@ def addconv_creator(variables):
     form = variables['form']
     mv = MessageVersion(
             message=Message.objects.get(id=root_msg.id),
-            author=User.objects.get(id=form.cleaned_data['author']),
+            author=form.cleaned_data['author'],
             creation_date=now,
             version_date=now,
             text=form.cleaned_data['text']
         )
     mv.save()
     conv = Conversation(
-            heap_id=form.cleaned_data['heap'],
+            heap=form.cleaned_data['heap'],
             subject=form.cleaned_data['subject'],
             root_message=root_msg
         )
@@ -353,9 +353,9 @@ class AddMessageForm(forms.Form):
 
 def addmessage_creation_access_controller(variables):
     form = variables['form']
-    parent = Message.objects.get(pk=form.cleaned_data['parent'])
+    parent = form.cleaned_data['parent']
     heap = parent.get_heap()
-    if variables['request'].user.id != form.cleaned_data['author']:
+    if variables['request'].user.id != form.cleaned_data['author'].id:
         needed_level = 2 
     else:
         needed_level = 1
@@ -374,8 +374,8 @@ def addmessage_creator(variables):
     form = variables['form']
     mv = MessageVersion(
             message=Message.objects.get(id=msg.id),
-            parent=Message.objects.get(id=form.cleaned_data['parent']),
-            author=User.objects.get(id=form.cleaned_data['author']),
+            parent=form.cleaned_data['parent'],
+            author=form.cleaned_data['author'],
             creation_date=now,
             version_date=now,
             text=form.cleaned_data['text']
@@ -443,13 +443,13 @@ def editmessage_creator(variables):
     now = datetime.datetime.now()
     form = variables['form']
     try:
-        parent = Message.objects.get(id=form.cleaned_data['parent'])
+        parent = form.cleaned_data['parent']
     except ObjectDoesNotExist:
         parent = None
     mv = MessageVersion(
             message=Message.objects.get(id=variables['obj_id']),
             parent=parent,
-            author=User.objects.get(id=form.cleaned_data['author']),
+            author=form.cleaned_data['author'],
             creation_date=form.cleaned_data['creation_date'],
             version_date=now,
             text=form.cleaned_data['text']
@@ -493,7 +493,7 @@ def replymessage_display_access_controller(variables):
 def replymessage_creation_access_controller(variables):
     parent = variables['parent']
     user = variables['request'].user
-    if user.id != variables['form'].cleaned_data['author']:
+    if user.id != variables['form'].cleaned_data['author'].id:
         needed_level = 2 
     else:
         needed_level = 1
@@ -508,7 +508,7 @@ def replymessage_creator(variables):
     mv = MessageVersion(
             message=Message.objects.get(id=msg.id),
             parent=variables['parent'],
-            author=User.objects.get(id=form.cleaned_data['author']),
+            author=form.cleaned_data['author'],
             creation_date=now,
             version_date=now,
             text=form.cleaned_data['text']

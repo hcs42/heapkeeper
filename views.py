@@ -94,7 +94,6 @@ def heap(request, heap_id):
                     if right == 3
                     else 'can'),
                 'right': UserRight.get_right_text(right),
-                'heapadmin': heapadmin
             })
     # For (semi)public heaps, display right granted to 'everyone else'
     if heap.visibility < 2:
@@ -113,7 +112,8 @@ def heap(request, heap_id):
             {'heap': heap,
              'visibility': visibility,
              'convs': convs,
-             'urights': urights}
+             'urights': urights,
+             'heapadmin': heapadmin}
         )
 
 def heaps(request):
@@ -541,8 +541,7 @@ def deleteright_creator(variables):
         affected_rights = heap.userright_set.filter(user=target_user)
         print 'affected rights: %s' % affected_rights
         affected_rights.delete()
-        heap_url = reverse('hk.views.heap', args=(heap.id,))
-        return redirect('%s' % heap_url)
+        return redirect(reverse('hk.views.heap', args=(heap.id,)))
 
 deleteright = make_view(
                 DeleteRightConfirmForm,
@@ -552,4 +551,43 @@ deleteright = make_view(
                     ('error_message', 'form', 'obj_id', 'obj2_id')),
                 deleteright_access_controller,
                 deleteright_access_controller
+            )
+
+##### "Add right" view
+
+class AddRightForm(forms.ModelForm):
+    class Meta:
+        model = UserRight
+        exclude = ('heap',)
+
+def addright_init(variables):
+    heap = get_object_or_404(Heap, pk=variables['obj_id'])
+    variables['heap'] = heap
+
+def addright_creator(variables):
+    heap = variables['heap']
+    target_user = variables['form'].cleaned_data['user']
+    given_right_now = heap.get_given_userright(target_user)
+    target_right = variables['form'].cleaned_data['right']
+    if target_right < given_right_now:
+        variables['error_message'] = 'User already has higher privileges.'
+        return
+    if given_right_now != -1:
+        heap.userright_set.filter(user=target_user).delete()  
+    new_ur = UserRight(heap=heap, user=target_user,
+                        right=target_right)
+    new_ur.save()
+    variables['error_message'] = 'OKOKOKOK'
+    return redirect(reverse('hk.views.heap', args=(heap.id,)))
+
+addright_access_controller = deleteright_access_controller
+ 
+addright = make_view(
+                AddRightForm,
+                addright_init,
+                addright_creator,
+                make_displayer('addright.html',
+                    ('error_message', 'form', 'obj_id')),
+                addright_access_controller,
+                addright_access_controller
             )

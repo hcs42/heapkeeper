@@ -17,13 +17,20 @@
             {% for uright in urights %}
                 <li>
                     {{ uright.name }} {{ uright.verb }} {{ uright.right }}
-                    {% if uright.heapadmin %}
+                    {% if heapadmin %}
                         <a href="{% url deleteright uright.uid heap.id %}">
                             delete
                         </a>
                     {% endif %}
                 </li>
             {% endfor %}
+            {% if heapadmin %}
+                <li>
+                    <a href="{% url addright heap.id %}">
+                        Add user right
+                    </a>
+                </li>
+            {% endif %}
             </ul>
         </div>
         <ul>

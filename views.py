@@ -78,6 +78,7 @@ def conversation(request, conv_id):
 def heap(request, heap_id):
     heap = get_object_or_404(Heap, pk=heap_id)
     heap.check_access(request.user, 0)
+    heapadmin = heap.get_effective_userright(request.user) == 3
     convs = Conversation.objects.filter(heap=heap)
     visibility = heap.get_visibility_display
 
@@ -87,11 +88,13 @@ def heap(request, heap_id):
     for user in heap.users():
         right = heap.get_effective_userright(user)
         urights.append({
+                'uid': user.id,
                 'name': user,
                 'verb': ('is'
                     if right == 3
                     else 'can'),
-                'right': UserRight.get_right_text(right)
+                'right': UserRight.get_right_text(right),
+                'heapadmin': heapadmin
             })
     # For (semi)public heaps, display right granted to 'everyone else'
     if heap.visibility < 2:
@@ -100,7 +103,8 @@ def heap(request, heap_id):
                 'name': 'everyone else',
                 # Anon is never heapadmin, so verb is always 'can'
                 'verb': 'can',
-                'right': UserRight.get_right_text(right)})
+                'right': UserRight.get_right_text(right),
+                'controls': ''})
 
     return render(
             request,
@@ -125,12 +129,13 @@ def heaps(request):
 def make_view(form_class, initializer, creator, displayer,
               creation_access_controller=None,
               display_access_controller=None):
-    def generic_view(request, obj_id=None):
+    def generic_view(request, obj_id=None, obj2_id=None):
         variables = \
             {
                 'request': request,
                 'error_message': '',
                 'obj_id': obj_id,
+                'obj2_id': obj2_id,
                 'form_class': form_class
             }
         initializer(variables)
@@ -142,7 +147,10 @@ def make_view(form_class, initializer, creator, displayer,
             if variables['form'].is_valid():
                 if creation_access_controller is not None:
                     creation_access_controller(variables)
-                creator(variables)
+                # If the creator returns anything, it is a redirect
+                res = creator(variables)
+                if res is not None:
+                    return res
         return displayer(variables)
 
     return generic_view
@@ -505,4 +513,42 @@ replymessage = make_view(
                 make_displayer('replymessage.html', ('error_message', 'form', 'obj_id')),
                 replymessage_creation_access_controller,
                 replymessage_display_access_controller
+            )
+
+##### "Delete right" view
+
+class DeleteRightConfirmForm(forms.Form):
+    really_revoke_right = forms.BooleanField()
+
+def deleteright_init(variables):
+    target_user = get_object_or_404(User, pk=variables['obj_id'])
+    variables['target_user'] = target_user
+    heap = get_object_or_404(Heap, pk=variables['obj2_id'])
+    variables['heap'] = heap
+
+def deleteright_access_controller(variables):
+    variables['heap'].check_access(variables['request'].user, 3)
+
+def deleteright_creator(variables):
+    if variables['form'].cleaned_data['really_revoke_right']:
+        heap = variables['heap']
+        target_user = variables['target_user']
+        print 'revoking rights from user %d on heap %d' % (
+                variables['target_user'].id,
+                heap.id,
+            )
+        affected_rights = heap.userright_set.filter(user=target_user)
+        print 'affected rights: %s' % affected_rights
+        affected_rights.delete()
+        heap_url = reverse('hk.views.heap', args=(heap.id,))
+        return redirect('%s' % heap_url)
+
+deleteright = make_view(
+                DeleteRightConfirmForm,
+                deleteright_init,
+                deleteright_creator,
+                make_displayer('deleteright.html',
+                    ('error_message', 'form', 'obj_id', 'obj2_id')),
+                deleteright_access_controller,
+                deleteright_access_controller
             )

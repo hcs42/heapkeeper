@@ -17,6 +17,11 @@
             {% for uright in urights %}
                 <li>
                     {{ uright.name }} {{ uright.verb }} {{ uright.right }}
+                    {% if uright.heapadmin %}
+                        <a href="{% url deleteright uright.uid heap.id %}">
+                            delete
+                        </a>
+                    {% endif %}
                 </li>
             {% endfor %}
             </ul>

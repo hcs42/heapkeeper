@@ -100,7 +100,8 @@ def heap(request, heap_id):
     if heap.visibility < 2:
         right = 1 if heap.visibility == 0 else 0
         urights.append({
-                'name': 'everyone else',
+                'name': 'everyone' if len(urights) == 0 \
+                    else 'everyone else',
                 # Anon is never heapadmin, so verb is always 'can'
                 'verb': 'can',
                 'right': UserRight.get_right_text(right),

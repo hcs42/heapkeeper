@@ -259,14 +259,15 @@ def register(request):
 ##### "Add conversation" view
 
 class AddConversationForm(forms.Form):
-    heap = forms.IntegerField()
-    author = forms.IntegerField()
+    heap = forms.ModelChoiceField(queryset=Heap.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     subject = forms.CharField()
     text = forms.CharField(widget=forms.Textarea())
 
 def addconv_init(variables):
     form_initial = {
-                'heap': variables['obj_id']
+                'heap': variables['obj_id'],
+                'author': variables['request'].user
             }
     variables['form_initial'] = form_initial
 
@@ -346,8 +347,8 @@ addheap = make_view(
 ##### "Add message" view
 
 class AddMessageForm(forms.Form):
-    parent = forms.IntegerField()
-    author = forms.IntegerField()
+    parent = forms.ModelChoiceField(queryset=Message.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     text = forms.CharField(widget=forms.Textarea())
 
 def addmessage_creation_access_controller(variables):
@@ -359,6 +360,12 @@ def addmessage_creation_access_controller(variables):
     else:
         needed_level = 1
     heap.check_access(variables['request'].user, needed_level)
+
+def addmessage_init(variables):
+    variables['form_initial'] = {
+            'author': variables['request'].user
+        }
+
 
 def addmessage_creator(variables):
     now = datetime.datetime.now()
@@ -381,7 +388,7 @@ def addmessage_creator(variables):
 
 addmessage = make_view(
                 AddMessageForm,
-                lambda x: None,
+                addmessage_init,
                 addmessage_creator,
                 make_displayer('addmessage.html', ('error_message', 'form')),
                 addmessage_creation_access_controller
@@ -390,8 +397,8 @@ addmessage = make_view(
 ##### "Edit message" view
 
 class EditMessageForm(forms.Form):
-    parent = forms.IntegerField(required=False)
-    author = forms.IntegerField()
+    parent = forms.ModelChoiceField(queryset=Message.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all())
     creation_date = forms.DateTimeField()
     text = forms.CharField(widget=forms.Textarea())
 
@@ -424,8 +431,8 @@ def editmessage_init(variables):
     lv = m.latest_version()
     form_initial = {
                 'creation_date': lv.creation_date,
-                'author': lv.author_id,
-                'parent': lv.parent_id,
+                'author': lv.author,
+                'parent': lv.parent,
                 'text': lv.text
             }
     variables['m'] = m
@@ -469,7 +476,6 @@ editmessage = make_view(
 ##### "Reply message" view
 
 class ReplyMessageForm(forms.Form):
-    #author = forms.IntegerField()
     author = forms.ModelChoiceField(queryset=User.objects.all())
     text = forms.CharField(widget=forms.Textarea())
 

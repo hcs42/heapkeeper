@@ -347,7 +347,8 @@ addheap = make_view(
 ##### "Add message" view
 
 class AddMessageForm(forms.Form):
-    parent = forms.ModelChoiceField(queryset=Message.objects.all())
+    parent = forms.ModelChoiceField(queryset=Message.objects.all(),
+                                    required=False)
     author = forms.ModelChoiceField(queryset=User.objects.all())
     text = forms.CharField(widget=forms.Textarea())
 
@@ -397,7 +398,8 @@ addmessage = make_view(
 ##### "Edit message" view
 
 class EditMessageForm(forms.Form):
-    parent = forms.ModelChoiceField(queryset=Message.objects.all())
+    parent = forms.ModelChoiceField(queryset=Message.objects.all(),
+                                    required=False)
     author = forms.ModelChoiceField(queryset=User.objects.all())
     creation_date = forms.DateTimeField()
     text = forms.CharField(widget=forms.Textarea())
@@ -516,7 +518,7 @@ def replymessage_creator(variables):
     mv.save()
     variables['form'] = variables['form_class']()
     variables['error_message'] = 'Message added.'
-    form = AddMessageForm()
+    form = ReplyMessageForm()
 
 replymessage = make_view(
                 ReplyMessageForm,

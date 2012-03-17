@@ -395,6 +395,75 @@ addmessage = make_view(
                 addmessage_creation_access_controller
             )
 
+##### "Delete message" view
+
+class DelMessageConfirmForm(forms.Form):
+    really_delete = forms.BooleanField()
+
+def delmessage_access_controller(variables):
+    message = variables['message']
+    heap = message.get_heap()
+    if variables['request'].user.id != message.latest_version().author.id:
+        needed_level = 2 
+    else:
+        needed_level = 1
+    heap.check_access(variables['request'].user, needed_level)
+
+def delmessage_init(variables):
+    msg_id = variables['obj_id']
+    variables['message'] = Message.objects.get(pk=msg_id)
+
+def delmessage_creator(variables):
+    # NOTE: this deleting code is fundamentally wrong. Deleting should
+    # be done via marking messages and messageversions as deleted.
+    # Objects should not be deleted. However, this requires database
+    # change. This code is kept so that deleting can be implemented
+    # base on this once the data model has been changed.
+
+    # Deleting a message is nontrivial:
+    # - all matching messageversions have to be deleted (Django does
+    # this automatically),
+    # - if the message was a root message, the corresponding
+    # conversation also has to be deleted,
+    # - if the message has children, they have to be made separate
+    # conversations.
+    # If the message had a parent, redirect to its conversation,
+    # otherwise to the former message's heap.
+    message = variables['message']
+    heap = message.get_heap()
+    conv = message.get_conversation()
+    parent = message.current_parent()
+    children = message.get_children()
+    if parent is not None:
+        redirect_url = reverse('hk.views.conversation',
+            args=(parent.get_conversation().id,))
+    else:
+        conv.delete()
+        redirect_url = reverse('hk.views.heap',
+            args=(heap.id,))
+    for child in children:
+        child.save()
+        child_conv = Conversation(
+                heap=heap,
+                subject=conv.subject,
+                root_message=child
+            )
+        child_conv.save()
+    print "deleting %s" % message
+    variables['message'].delete()
+    variables['error_message'] = 'Message deleted.'
+    return redirect(redirect_url)
+
+delmessage = make_view(
+                DelMessageConfirmForm,
+                delmessage_init,
+                delmessage_creator,
+                make_displayer('deletemessage.html',
+                                ('message', 'error_message', 'form')),
+                delmessage_access_controller,
+                delmessage_access_controller
+            )
+
 ##### "Edit message" view
 
 class EditMessageForm(forms.Form):
@@ -442,6 +511,12 @@ def editmessage_init(variables):
     variables['form_initial'] = form_initial
 
 def editmessage_creator(variables):
+    # TODO: if the parent is changed, conversations can break and
+    # join. This should be handled:
+    # - if previously parent was None, and parent is set, delete the
+    # message's matching Conversation object,
+    # - if previously parent was set, and becomes None, create a new
+    # Conversation object.
     now = datetime.datetime.now()
     form = variables['form']
     try:

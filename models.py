@@ -19,6 +19,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core import urlresolvers
 from django.core.exceptions import PermissionDenied
+import datetime
 
 class Message(models.Model):
     users_have_read = models.ManyToManyField(User, null=True, blank=True)
@@ -45,8 +46,35 @@ class Message(models.Model):
         return '<a href="%s">%s</a>' % (url, latest)
     latest_version_link.allow_tags = True
 
+    def is_deleted(self):
+        return self.latest_version().deleted
+
+    def mark_deleted(self):
+        self.change(deleted=True)
+
+    def change(self, **kwargs):
+        # A function to create a new version of the message with some
+        # fields changed
+        latest = self.latest_version()
+        mv = MessageVersion(
+                message=self,
+                parent=latest.parent,
+                author=latest.author,
+                creation_date=latest.creation_date,
+                version_date=datetime.datetime.now(),
+                text=latest.text,
+                deleted = True
+            )
+        for field in kwargs:
+            setattr(mv, field, kwargs[field])
+        mv.save() 
+
     def current_parent(self):
-        return self.latest_version().parent
+        parent = self.latest_version().parent
+        if parent is not None and parent.is_deleted():
+            print 'Database error: parent is deleted for msg %d' \
+                % self.id
+        return parent
 
     def get_root_message(self):
         # Does not check for cycles -- causes endless loop.
@@ -58,14 +86,16 @@ class Message(models.Model):
             msg = latest_parent
 
     def get_conversation(self):
-        root_message = self.get_root_message
+        root_message = self.get_root_message()
         return Conversation.objects.get(root_message=root_message)
 
     def get_heap(self):
         return self.get_conversation().heap
 
     def get_children(self):
-        return [m for m in Message.objects.all() if m.current_parent() == self]
+        return [m for m in Message.objects.all()
+                    if not m.is_deleted()
+                        and m.current_parent() == self]
 
 
 class Label(models.Model):
@@ -78,11 +108,12 @@ class Label(models.Model):
 class MessageVersion(models.Model):
     message = models.ForeignKey(Message, related_name='message')
     parent = models.ForeignKey(Message, related_name='parent', null=True, blank=True)
-    author = models.ForeignKey(User)
+    author = models.ForeignKey(User, null=True, blank=True)
     creation_date = models.DateTimeField('message creation date')
     version_date = models.DateTimeField('version creation date')
     text = models.TextField('the text of the message')
     labels = models.ManyToManyField(Label, null=True, blank=True)
+    deleted = models.BooleanField()
 
     def __unicode__(self):
         labels = ', '.join([label.text for label in self.labels.all()])

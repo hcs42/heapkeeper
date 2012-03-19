@@ -35,6 +35,7 @@ def print_message(l, msg):
     children = msg.get_children()
     edit_url = reverse('hk.views.editmessage', args=(msg.id,))
     reply_url = reverse('hk.views.replymessage', args=(msg.id,))
+    delete_url = reverse('hk.views.delmessage', args=(msg.id,))
     l.append("<div class='message'>\n")
     l.append("<a name='message_%d'></a>\n" % msg.id)
     l.append('<h3>\n&lt;%d&gt;\n</h3>\n' % msg.id)
@@ -43,6 +44,7 @@ def print_message(l, msg):
     l.append('<h3>\n%s\n</h3>\n' % msg.latest_version().creation_date)
     l.append("<a href='%s'>edit</a>\n" % edit_url)
     l.append("<a href='%s'>reply</a>\n" % reply_url)
+    l.append("<a href='%s'>delete</a>\n" % delete_url)
     l.append('<p>\n%s\n</p>\n' % msg.latest_version().text)
     for child in msg.get_children():
         print_message(l, child)
@@ -414,43 +416,36 @@ def delmessage_init(variables):
     variables['message'] = Message.objects.get(pk=msg_id)
 
 def delmessage_creator(variables):
-    # NOTE: this deleting code is fundamentally wrong. Deleting should
-    # be done via marking messages and messageversions as deleted.
-    # Objects should not be deleted. However, this requires database
-    # change. This code is kept so that deleting can be implemented
-    # base on this once the data model has been changed.
-
-    # Deleting a message is nontrivial:
-    # - all matching messageversions have to be deleted (Django does
-    # this automatically),
-    # - if the message was a root message, the corresponding
-    # conversation also has to be deleted,
-    # - if the message has children, they have to be made separate
-    # conversations.
-    # If the message had a parent, redirect to its conversation,
-    # otherwise to the former message's heap.
     message = variables['message']
     heap = message.get_heap()
     conv = message.get_conversation()
     parent = message.current_parent()
     children = message.get_children()
-    if parent is not None:
-        redirect_url = reverse('hk.views.conversation',
-            args=(parent.get_conversation().id,))
-    else:
+
+    # Step 1: if message is root, delete conv and redirect to heap
+    if parent is None:
         conv.delete()
         redirect_url = reverse('hk.views.heap',
             args=(heap.id,))
+    else:
+        # Otherwise redirect back to the conversation
+        redirect_url = reverse('hk.views.conversation',
+            args=(parent.get_conversation().id,))
+
+    # Step 2: if message has children, give them their own
+    # conversations, and remove their parents
     for child in children:
-        child.save()
+        child.change(parent=None)
         child_conv = Conversation(
                 heap=heap,
                 subject=conv.subject,
                 root_message=child
             )
         child_conv.save()
+
+    # Step 3: delete message
     print "deleting %s" % message
-    variables['message'].delete()
+    variables['message'].mark_deleted()
     variables['error_message'] = 'Message deleted.'
     return redirect(redirect_url)
 

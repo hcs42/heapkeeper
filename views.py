@@ -506,31 +506,41 @@ def editmessage_init(variables):
     variables['form_initial'] = form_initial
 
 def editmessage_creator(variables):
-    # TODO: if the parent is changed, conversations can break and
-    # join. This should be handled:
-    # - if previously parent was None, and parent is set, delete the
-    # message's matching Conversation object,
-    # - if previously parent was set, and becomes None, create a new
-    # Conversation object.
     now = datetime.datetime.now()
     form = variables['form']
+    msg = Message.objects.get(id=variables['obj_id'])
+    msg_conv = msg.get_conversation()
+    heap = msg.get_heap()
+    curr_parent = msg.latest_version().parent
     try:
-        parent = form.cleaned_data['parent']
+        new_parent = form.cleaned_data['parent']
     except ObjectDoesNotExist:
-        parent = None
+        new_parent = None
     mv = MessageVersion(
-            message=Message.objects.get(id=variables['obj_id']),
-            parent=parent,
+            message=msg,
+            parent=new_parent,
             author=form.cleaned_data['author'],
             creation_date=form.cleaned_data['creation_date'],
             version_date=now,
             text=form.cleaned_data['text']
         )
     mv.save()
+    # Joining conversations
+    if curr_parent is None and new_parent is not None:
+        msg_conv.delete()
+    # Breaking conversation
+    if curr_parent is not None and new_parent is None:
+        new_conv = Conversation(
+                heap=heap,
+                subject=msg_conv.subject,
+                root_message=msg
+            )
+        new_conv.save()
+    # Redirect back to the conversation of the edited post (may differ
+    # from msg_conv)
+    conv_url = reverse('hk.views.conversation',
+                        args=(msg.get_conversation().id,))
     variables['error_message'] = 'Message saved.'
-    root_msg = Message.objects.get(id=variables['obj_id']).get_root_message()
-    conv_id = Conversation.objects.get(root_message=root_msg).id
-    conv_url = reverse('hk.views.conversation', args=(conv_id,))
     return redirect(
             '%s#message_%d' %
                 (conv_url, int(variables['obj_id']))

@@ -312,7 +312,8 @@ def addconv_creator(variables):
     conv.save()
     variables['form'] = variables['form_class']()
     variables['error_message'] = 'Conversation started.'
-
+    conv_url = reverse('hk.views.conversation', args=(conv.id,))
+    return redirect(conv_url)
 
 addconv = make_view(
                 AddConversationForm,
@@ -345,6 +346,8 @@ def addheap_creator(variables):
     ur.save()
     variables['form'] = variables['form_class']()
     variables['error_message'] = 'Heap added.'
+    heap_url = reverse('hk.views.heap', args=(heap.id,))
+    return redirect(heap_url)
 
 def addheap_access_controller(variables):
     if variables['request'].user.is_anonymous():
@@ -612,6 +615,13 @@ def replymessage_creator(variables):
     variables['form'] = variables['form_class']()
     variables['error_message'] = 'Message added.'
     form = ReplyMessageForm()
+    conv_id = msg.get_conversation().id
+    conv_url = reverse('hk.views.conversation', args=(conv_id,))
+    return redirect(
+            '%s#message_%d' %
+                (conv_url, int(variables['obj_id']))
+        )
+    return redirect(conv_url)
 
 replymessage = make_view(
                 ReplyMessageForm,

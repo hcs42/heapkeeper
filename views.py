@@ -20,8 +20,11 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.template import RequestContext
 from django import forms
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.http import Http404
 from django.core.urlresolvers import reverse
+from fsck import fsck
 import django.db
 from hk.models import *
 import datetime
@@ -67,7 +70,10 @@ def conversation(request, conv_id):
     conv.heap.check_access(request.user, 0)
     root = conv.root_message
     l = []
-    print_message(l, root)
+    if not root.is_deleted():
+        print_message(l, root)
+    else:
+        raise Http404
     ls = [unicode(m) for m in l]
     return render(
             request,
@@ -257,6 +263,7 @@ def register(request):
                request,
                'registration/register.html',
                {'form':  form})
+
 
 ##### "Add conversation" view
 

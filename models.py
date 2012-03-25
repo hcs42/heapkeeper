@@ -71,16 +71,19 @@ class Message(models.Model):
 
     def current_parent(self):
         parent = self.latest_version().parent
-        if parent is not None and parent.is_deleted():
-            print 'Database error: parent is deleted for msg %d' \
-                % self.id
         return parent
 
-    def get_root_message(self):
-        # Does not check for cycles -- causes endless loop.
+    def get_root_message(self, exception=False):
+        touched = []
         msg = self
         while True:
-            latest_parent = msg.latest_version().parent 
+            touched.append(msg)
+            latest_parent = msg.latest_version().parent
+            if latest_parent in touched:
+                if exception:
+                    raise LoopException(touched)
+                else:
+                    return None
             if latest_parent is None:
                 return msg
             msg = latest_parent
@@ -241,3 +244,11 @@ class HkException(Exception):
             return unicode(value)
         else:
             return repr(value)
+
+class LoopException(Exception):
+    def __init__(self, messages):
+        Exception.__init__(self)
+        self.messages = messages
+
+    def __unicode__(self):
+        return u'%d messages in loop' % len(self.messages)

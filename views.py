@@ -337,6 +337,12 @@ def addheap_creator(variables):
             visibility=0
         )
     heap.save()
+    ur = UserRight(
+            user = variables['request'].user,
+            heap = heap,
+            right = 3
+        )
+    ur.save()
     variables['form'] = variables['form_class']()
     variables['error_message'] = 'Heap added.'
 

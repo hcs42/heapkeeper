@@ -53,6 +53,16 @@ def print_message(l, msg):
         print_message(l, child)
     l.append('</div>\n')
 
+def add_children_recursively(l, root):
+    for child in root.get_children():
+        l.append(child)
+        add_children_recursively(l, child)
+
+def remove_children_recursively(l, root):
+    for child in root.get_children():
+        l.remove(child)
+        remove_children_recursively(l, child)
+
 ##### Simple views
 
 def testgetmsg(request, msg_id):
@@ -138,7 +148,8 @@ def heaps(request):
 
 def make_view(form_class, initializer, creator, displayer,
               creation_access_controller=None,
-              display_access_controller=None):
+              display_access_controller=None,
+              form_postprocessor=None):
     def generic_view(request, obj_id=None, obj2_id=None):
         variables = \
             {
@@ -152,8 +163,12 @@ def make_view(form_class, initializer, creator, displayer,
         if display_access_controller is not None:
             display_access_controller(variables)
         variables['form'] = form_class(initial=variables.get('form_initial'))
+        if form_postprocessor is not None:
+            form_postprocessor(variables)
         if request.method == 'POST':
             variables['form'] = form_class(request.POST)
+            if form_postprocessor is not None:
+                form_postprocessor(variables)
             if variables['form'].is_valid():
                 if creation_access_controller is not None:
                     creation_access_controller(variables)
@@ -478,8 +493,21 @@ delmessage = make_view(
 ##### "Edit message" view
 
 class EditMessageForm(forms.Form):
-    parent = forms.ModelChoiceField(queryset=Message.objects.all(),
-                                    required=False)
+    def editmessage_coerce(id):
+        id = int(id)
+        if id == 0:
+            return None
+        else:
+            return Message.objects.get(pk=id)
+
+    # parent field created by editmessage_form_postprocessor
+    #parent = forms.ModelChoiceField(queryset=Message.objects.all(),
+    #                                    required=False)
+    parent = forms.TypedChoiceField(
+                choices=(),
+                empty_value=None,
+                coerce=editmessage_coerce,
+                required=False)
     author = forms.ModelChoiceField(queryset=User.objects.all())
     creation_date = forms.DateTimeField()
     text = forms.CharField(widget=forms.Textarea())
@@ -514,14 +542,27 @@ def editmessage_init(variables):
     form_initial = {
                 'creation_date': lv.creation_date,
                 'author': lv.author,
-                'parent': lv.parent,
+                'parent': lv.parent.id if lv.parent is not None else 0,
                 'text': lv.text
             }
     variables['m'] = m
     variables['lv'] = lv
     variables['form_initial'] = form_initial
 
+def editmessage_form_postprocessor(variables):
+    msg = variables['m']
+    root = msg.get_root_message()
+    possible_parents = [root]
+    add_children_recursively(possible_parents, root)
+    possible_parents.remove(msg)
+    remove_children_recursively(possible_parents, msg)
+    choices = [(msg.id, msg) for msg in possible_parents]
+    choices.append((0, '(none)'))
+    variables['form'].fields['parent'].choices = choices
+
 def editmessage_creator(variables):
+    # TODO It is still possible to create a loop via a crafted POST. Such cases
+    # should be detected and denied.
     now = datetime.datetime.now()
     form = variables['form']
     msg = Message.objects.get(id=variables['obj_id'])
@@ -530,7 +571,7 @@ def editmessage_creator(variables):
     curr_parent = msg.latest_version().parent
     try:
         new_parent = form.cleaned_data['parent']
-    except ObjectDoesNotExist:
+    except DoesNotExist:
         new_parent = None
     mv = MessageVersion(
             message=msg,
@@ -568,7 +609,8 @@ editmessage = make_view(
                 editmessage_creator,
                 make_displayer('editmessage.html', ('error_message', 'form', 'obj_id')),
                 editmessage_creation_access_controller,
-                editmessage_display_access_controller
+                editmessage_display_access_controller,
+                editmessage_form_postprocessor
             )
 
 ##### "Reply message" view

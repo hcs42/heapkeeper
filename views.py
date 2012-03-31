@@ -227,9 +227,6 @@ def create_user(request, username, password1, password2, email_address,
 
         user.save()
 
-        # Should be 'messages.succes(request, 'text')
-        print 'Successful registration. Please log in!'
-
         front_url = reverse('hk.views.front', args=[])
         return HttpResponseRedirect(front_url)
 
@@ -340,7 +337,6 @@ addconv = make_view(
 
 ##### "Add heap" view
 
-# TODO: user has to be non-anonymous to add heaps
 class AddHeapForm(forms.Form):
     short_name = forms.CharField()
     long_name = forms.CharField()
@@ -475,7 +471,6 @@ def delmessage_creator(variables):
         child_conv.save()
 
     # Step 3: delete message
-    print "deleting %s" % message
     variables['message'].mark_deleted()
     variables['error_message'] = 'Message deleted.'
     return redirect(redirect_url)
@@ -692,12 +687,7 @@ def deleteright_creator(variables):
     if variables['form'].cleaned_data['really_revoke_right']:
         heap = variables['heap']
         target_user = variables['target_user']
-        print 'revoking rights from user %d on heap %d' % (
-                variables['target_user'].id,
-                heap.id,
-            )
         affected_rights = heap.userright_set.filter(user=target_user)
-        print 'affected rights: %s' % affected_rights
         affected_rights.delete()
         return redirect(reverse('hk.views.heap', args=(heap.id,)))
 

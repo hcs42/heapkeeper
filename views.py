@@ -94,11 +94,17 @@ def conversation(request, conv_id):
     else:
         raise Http404
     ls = [unicode(m) for m in l]
+    effective_right = conv.heap.get_effective_userright(request.user)
+    if request.user.id == conv.root_message.latest_version().author.id:
+        needed_right = 1
+    else:
+        needed_right = 2 
+    add_conv_controls = effective_right >= needed_right
     return render(
             request,
             'conversation.html',
             {'conv': conv,
-             'conv_labels': format_labels(conv, conv=True),
+             'conv_labels': format_labels(conv, conv=add_conv_controls),
              'l': '\n'.join(ls)}
         )
 

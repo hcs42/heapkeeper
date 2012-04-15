@@ -31,8 +31,17 @@ import datetime
 
 ##### Helper functions 
 
-def format_labels(object):
-    return '[%s]' % ', '.join([t.text for t in object.labels.all()])
+def format_labels(obj, conv=False):
+    labels = ['%s <a class="rmlabel" href="%s">x</a>'
+                % (label.pk,
+                    reverse('hk.views.removeconversationlabel',
+                        args=(label.pk, obj.id,)))
+                for label in obj.labels.all()]
+    if conv:
+        labels.append('<a class="addlabel" href="%s">+</a>'
+                        % reverse('hk.views.addconversationlabel',
+                            args=(obj.id,)))
+    return '[%s]' % ', '.join([l for l in labels])
 
 def print_message(l, msg):
     children = msg.get_children()
@@ -89,7 +98,7 @@ def conversation(request, conv_id):
             request,
             'conversation.html',
             {'conv': conv,
-             'conv_labels': format_labels(conv),
+             'conv_labels': format_labels(conv, conv=True),
              'l': '\n'.join(ls)}
         )
 
@@ -143,6 +152,21 @@ def heaps(request):
             'heaps.html',
             {'heaps': heaps}
         )
+
+def removeconversationlabel(request, label_text, obj_id):
+    conv = get_object_or_404(Conversation, pk=obj_id)
+    if request.user.id == conv.root_message.latest_version().author.id:
+        needed_level = 1
+    else:
+        needed_level = 2 
+    conv.heap.check_access(request.user, needed_level)
+    label = get_object_or_404(Label, pk=label_text)
+    conv.labels.remove(label)
+    conv.save()
+    if label.messageversion_set.count() == 0 \
+            and label.conversation_set.count() == 0:
+        label.delete()
+    return redirect(reverse('hk.views.conversation', args=(conv.id,)))
 
 ##### Generic framework for form-related views
 
@@ -739,3 +763,48 @@ addright = make_view(
                 addright_access_controller,
                 addright_access_controller
             )
+
+##### "Add conversation label" view
+
+class AddConversationLabelForm(forms.Form):
+    label = forms.CharField()
+
+def addconversationlabel_init(variables):
+    conv = get_object_or_404(Conversation, pk=variables['obj_id'])
+    variables['conv'] = conv
+
+def addconversationlabel_creator(variables):
+    conv = variables['conv']
+    label = variables['form'].cleaned_data['label']
+    print "Adding label %s to conv %d." % (label, conv.id)
+    try:
+        label_obj = Label.objects.get(pk=label)
+    except Label.DoesNotExist:
+        label_obj = Label(text=label)
+        label_obj.save()
+    conv.labels.add(label_obj)
+    conv.save()
+    variables['error_message'] = 'OKOKOKOK'
+    return redirect(reverse('hk.views.conversation', args=(conv.id,)))
+
+def addconversationlabel_access_controller(variables):
+    # If the root post is owned by the user, send (1) is needed,
+    # otherwise alter (2).
+    conv = variables['conv']
+    root_author = conv.root_message.latest_version().author.id
+    if variables['request'].user.id == root_author:
+        needed_level = 1
+    else:
+        needed_level = 2 
+    conv.heap.check_access(variables['request'].user, needed_level)
+
+addconversationlabel = make_view(
+                AddConversationLabelForm,
+                addconversationlabel_init,
+                addconversationlabel_creator,
+                make_displayer('addconversationlabel.html',
+                    ('error_message', 'form', 'obj_id')),
+                addconversationlabel_access_controller,
+                addconversationlabel_access_controller
+            )
+

@@ -51,7 +51,10 @@ def print_message(l, msg):
     l.append("<div class='message'>\n")
     l.append("<a name='message_%d'></a>\n" % msg.id)
     l.append('<h3>\n&lt;%d&gt;\n</h3>\n' % msg.id)
-    l.append('<h3>\n%s\n</h3>\n' % msg.latest_version().author)
+    author = msg.latest_version().author
+    if author is None:
+        author = 'anonymous user'
+    l.append('<h3>\n%s\n</h3>\n' % author)
     l.append('<h3>\n%s\n</h3>\n' % format_labels(msg.latest_version()))
     l.append('<h3>\n%s\n</h3>\n' % msg.latest_version().creation_date)
     l.append("<a href='%s'>edit</a>\n" % edit_url)
@@ -95,10 +98,14 @@ def conversation(request, conv_id):
         raise Http404
     ls = [unicode(m) for m in l]
     effective_right = conv.heap.get_effective_userright(request.user)
-    if request.user.id == conv.root_message.latest_version().author.id:
-        needed_right = 1
+    rlv = conv.root_message.latest_version()
+    if rlv.author is None:
+        needed_right = 1    # Anyone is free to edit anonymous posts
     else:
-        needed_right = 2 
+        if request.user.id == rlv.author.id:
+            needed_right = 1
+        else:
+            needed_right = 2 
     add_conv_controls = effective_right >= needed_right
     return render(
             request,
@@ -162,7 +169,10 @@ def heaps(request):
 
 def removeconversationlabel(request, label_text, obj_id):
     conv = get_object_or_404(Conversation, pk=obj_id)
-    if request.user.id == conv.root_message.latest_version().author.id:
+    root_author = conv.root_message.latest_version().author
+    if root_author is None:
+        needed_level = 1
+    elif request.user.id == root_author.id:
         needed_level = 1
     else:
         needed_level = 2 
@@ -312,7 +322,9 @@ def register(request):
 
 class AddConversationForm(forms.Form):
     heap = forms.ModelChoiceField(queryset=Heap.objects.all())
-    author = forms.ModelChoiceField(queryset=User.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all(),
+                                    required=False)
+
     subject = forms.CharField()
     text = forms.CharField(widget=forms.Textarea())
 
@@ -327,8 +339,10 @@ def addconv_creation_access_controller(variables):
     form = variables['form']
     heap = form.cleaned_data['heap']
     # Needs alter level if user wants to start conversation in someone
-    # else's name
-    if variables['request'].user.id != form.cleaned_data['author'].id:
+    # else's name. Anyone can post anonymously.
+    if form.cleaned_data['author'] == None:
+        needed_level = 1
+    elif variables['request'].user.id != form.cleaned_data['author'].id:
         needed_level = 2 
     else:
         needed_level = 1
@@ -409,14 +423,17 @@ addheap = make_view(
 class AddMessageForm(forms.Form):
     parent = forms.ModelChoiceField(queryset=Message.objects.all(),
                                     required=False)
-    author = forms.ModelChoiceField(queryset=User.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all(),
+                                    required=False)
     text = forms.CharField(widget=forms.Textarea())
 
 def addmessage_creation_access_controller(variables):
     form = variables['form']
     parent = form.cleaned_data['parent']
     heap = parent.get_heap()
-    if variables['request'].user.id != form.cleaned_data['author'].id:
+    if form.cleaned_data['author'] == None:
+        needed_level = 1
+    elif variables['request'].user != form.cleaned_data['author']:
         needed_level = 2 
     else:
         needed_level = 1
@@ -463,7 +480,10 @@ class DelMessageConfirmForm(forms.Form):
 def delmessage_access_controller(variables):
     message = variables['message']
     heap = message.get_heap()
-    if variables['request'].user.id != message.latest_version().author.id:
+    if variables['request'].user.is_anonymous():
+        # Anonymous users cannot be allowed to delete anonymous posts
+        needed_level = 2
+    elif variables['request'].user.id != message.latest_version().author.id:
         needed_level = 2 
     else:
         needed_level = 1
@@ -534,7 +554,8 @@ class EditMessageForm(forms.Form):
                 empty_value=None,
                 coerce=editmessage_coerce,
                 required=False)
-    author = forms.ModelChoiceField(queryset=User.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all(),
+                                    required=False)
     creation_date = forms.DateTimeField()
     text = forms.CharField(widget=forms.Textarea())
 
@@ -543,20 +564,37 @@ def editmessage_creation_access_controller(variables):
     heap = variables['m'].get_heap()
     user = variables['request'].user
     msg = variables['m']
-    # Editing someone else's post and giving a post to someone else
-    # both require alter rights
-    if user.id != msg.latest_version().author.id \
-        or user.id != form.cleaned_data['author']:
-        needed_level = 2 
-    else:
+    lv = msg.latest_version()
+
+    # 3 users are considered:
+    # - the user currently logged in (requestuser)
+    # - the current author of the post (currentauthor)
+    # - the author to be set, specified in the form (formauthor)
+
+    requestuser = user
+    currentauthor = lv.author
+    formauthor = form.cleaned_data['author']
+    if (currentauthor is None
+            and (formauthor is None or formauthor==requestuser)):
+        # Senders can edit and take over anonymous posts
         needed_level = 1
+    elif (requestuser == currentauthor
+            and requestuser == formauthor):
+        # Senders can edit their own posts
+        needed_level = 1
+    else:
+        # Everything else needs alter
+        needed_level = 2
     heap.check_access(variables['request'].user, needed_level)
 
 def editmessage_display_access_controller(variables):
     heap = variables['m'].get_heap()
     user = variables['request'].user
     msg = variables['m']
-    if user.id != msg.latest_version().author.id:
+    lv = msg.latest_version()
+    if lv.author is None:
+        needed_level = 1
+    elif user.id != lv.author.id:
         needed_level = 2 
     else:
         needed_level = 1
@@ -642,7 +680,8 @@ editmessage = make_view(
 ##### "Reply message" view
 
 class ReplyMessageForm(forms.Form):
-    author = forms.ModelChoiceField(queryset=User.objects.all())
+    author = forms.ModelChoiceField(queryset=User.objects.all(),
+                                    required=False)
     text = forms.CharField(widget=forms.Textarea())
 
 def replymessage_init(variables):
@@ -659,7 +698,12 @@ def replymessage_display_access_controller(variables):
 def replymessage_creation_access_controller(variables):
     parent = variables['parent']
     user = variables['request'].user
-    if user.id != variables['form'].cleaned_data['author'].id:
+    print user
+    print variables['form'].cleaned_data['author']
+    if user.is_anonymous() \
+            and variables['form'].cleaned_data['author'] is None:
+        needed_level = 1
+    elif user.id != variables['form'].cleaned_data['author'].id:
         needed_level = 2 
     else:
         needed_level = 1
@@ -798,8 +842,10 @@ def addconversationlabel_access_controller(variables):
     # If the root post is owned by the user, send (1) is needed,
     # otherwise alter (2).
     conv = variables['conv']
-    root_author = conv.root_message.latest_version().author.id
-    if variables['request'].user.id == root_author:
+    root_author = conv.root_message.latest_version().author
+    if root_author is None:
+        needed_level = 1
+    elif variables['request'].user.id == root_author.id:
         needed_level = 1
     else:
         needed_level = 2 

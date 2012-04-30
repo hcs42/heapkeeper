@@ -133,9 +133,10 @@ def heap(request, heap_id):
         right = 1 if heap.visibility == 0 else 0
         urights.append({
                 'uid': -1,
+                    # The special uid -1 means 'everyone else'
                 'name': 'everyone' if len(urights) == 0 \
                     else 'everyone else',
-                # Anon is never heapadmin, so verb is always 'can'
+                    # Anon is never heapadmin, so verb is always 'can'
                 'verb': 'can',
                 'right': UserRight.get_right_text(right),
                 'controls': ''})

@@ -154,6 +154,8 @@ class Heap(models.Model):
         if not user.is_authenticated():
             return -1
         highest = None
+        # TODO: issue a warning if multiple userrights exist for a given user
+        # and heap
         for uright in self.userright_set.filter(user=user):
             if highest is None or uright.right > highest.right:
                 highest = uright
@@ -165,13 +167,16 @@ class Heap(models.Model):
             return 3
         given_right = self.get_given_userright(user)
         visibility = self.visibility
-        visibility_rights_dict = \
-            {
-                0: 1, # Public heaps can at least be sent to,
-                1: 0, # Semipublic heaps cat at least be read,
-                2: -1 # Private heaps give no rights to anyone.
-            }
-        visibility_right = visibility_rights_dict[visibility]
+        visibility_rights = \
+            (
+                # visibility == 0:
+                1, # Public heaps can at least be sent to,
+                # visibility == 1:
+                0, # Semipublic heaps cat at least be read,
+                # visibility == 2:
+                -1 # Private heaps give no rights to anyone.
+            )
+        visibility_right = visibility_rights[visibility]
         return max(given_right, visibility_right)
 
     def is_visible_for(self, user):

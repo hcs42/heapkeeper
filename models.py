@@ -19,6 +19,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core import urlresolvers
 from django.core.exceptions import PermissionDenied
+import datetime
 
 class Message(models.Model):
     users_have_read = models.ManyToManyField(User, null=True, blank=True)
@@ -45,27 +46,59 @@ class Message(models.Model):
         return '<a href="%s">%s</a>' % (url, latest)
     latest_version_link.allow_tags = True
 
-    def current_parent(self):
-        return self.latest_version().parent
+    def is_deleted(self):
+        return self.latest_version().deleted
 
-    def get_root_message(self):
-        # Does not check for cycles -- causes endless loop.
+    def mark_deleted(self):
+        self.change(deleted=True)
+
+    def change(self, **kwargs):
+        # A function to create a new version of the message with some
+        # fields changed
+        latest = self.latest_version()
+        mv = MessageVersion(
+                message=self,
+                parent=latest.parent,
+                author=latest.author,
+                creation_date=latest.creation_date,
+                version_date=datetime.datetime.now(),
+                text=latest.text,
+                deleted = True
+            )
+        for field in kwargs:
+            setattr(mv, field, kwargs[field])
+        mv.save() 
+
+    def current_parent(self):
+        parent = self.latest_version().parent
+        return parent
+
+    def get_root_message(self, exception=False):
+        touched = []
         msg = self
         while True:
-            latest_parent = msg.latest_version().parent 
+            touched.append(msg)
+            latest_parent = msg.latest_version().parent
+            if latest_parent in touched:
+                if exception:
+                    raise LoopException(touched)
+                else:
+                    return None
             if latest_parent is None:
                 return msg
             msg = latest_parent
 
     def get_conversation(self):
-        root_message = self.get_root_message
+        root_message = self.get_root_message()
         return Conversation.objects.get(root_message=root_message)
 
     def get_heap(self):
         return self.get_conversation().heap
 
     def get_children(self):
-        return [m for m in Message.objects.all() if m.current_parent() == self]
+        return [m for m in Message.objects.all()
+                    if not m.is_deleted()
+                        and m.current_parent() == self]
 
 
 class Label(models.Model):
@@ -78,11 +111,12 @@ class Label(models.Model):
 class MessageVersion(models.Model):
     message = models.ForeignKey(Message, related_name='message')
     parent = models.ForeignKey(Message, related_name='parent', null=True, blank=True)
-    author = models.ForeignKey(User)
+    author = models.ForeignKey(User, null=True, blank=True)
     creation_date = models.DateTimeField('message creation date')
     version_date = models.DateTimeField('version creation date')
     text = models.TextField('the text of the message')
     labels = models.ManyToManyField(Label, null=True, blank=True)
+    deleted = models.BooleanField()
 
     def __unicode__(self):
         labels = ', '.join([label.text for label in self.labels.all()])
@@ -120,6 +154,8 @@ class Heap(models.Model):
         if not user.is_authenticated():
             return -1
         highest = None
+        # TODO: issue a warning if multiple userrights exist for a given user
+        # and heap
         for uright in self.userright_set.filter(user=user):
             if highest is None or uright.right > highest.right:
                 highest = uright
@@ -131,13 +167,16 @@ class Heap(models.Model):
             return 3
         given_right = self.get_given_userright(user)
         visibility = self.visibility
-        visibility_rights_dict = \
-            {
-                0: 1, # Public heaps can at least be sent to,
-                1: 0, # Semipublic heaps cat at least be read,
-                2: -1 # Private heaps give no rights to anyone.
-            }
-        visibility_right = visibility_rights_dict[visibility]
+        visibility_rights = \
+            (
+                # visibility == 0:
+                1, # Public heaps can at least be sent to,
+                # visibility == 1:
+                0, # Semipublic heaps cat at least be read,
+                # visibility == 2:
+                -1 # Private heaps give no rights to anyone.
+            )
+        visibility_right = visibility_rights[visibility]
         return max(given_right, visibility_right)
 
     def is_visible_for(self, user):
@@ -210,3 +249,11 @@ class HkException(Exception):
             return unicode(value)
         else:
             return repr(value)
+
+class LoopException(Exception):
+    def __init__(self, messages):
+        Exception.__init__(self)
+        self.messages = messages
+
+    def __unicode__(self):
+        return u'%d messages in loop' % len(self.messages)

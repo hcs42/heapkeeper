@@ -1,0 +1,9 @@
+{% extends "form.html" %}
+{% block title %}
+    Delete message
+{% endblock %}
+{% block header %}
+    Delete message
+{% endblock %}
+{% block action %}{% url hk.views.delmessage message.id %}{% endblock %}
+{% block submittext%}Delete message{% endblock %}

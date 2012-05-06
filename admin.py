@@ -20,7 +20,7 @@ from django.contrib import admin
 class MessageVersionInline(admin.StackedInline):
     model = hk.models.MessageVersion
     fieldsets = [
-        (None, {'fields': ['author', 'parent']}),
+        (None, {'fields': ['author', 'parent', 'deleted']}),
         ('Header information',
             {
                 'fields': ['creation_date', 'version_date', 'labels'],

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}
+    Database integrity check
+{% endblock %}
+{% block header %}
+    Database integrity check
+{% endblock %}
+{% block body %}
+<pre>
+            {{ res|safe }}
+<pre>
+{% endblock %}

@@ -4,23 +4,185 @@
             Heapkeeper - {% block title %}{% endblock %}
         </title>
         <style>
-            div.message { padding-left: 3em; }
+            /* These affect every page. */
+            body
+            {
+                margin: 0;
+            }
+
+            a#logo
+            {
+                color: white;
+                text-decoration: none;
+            }
+
+            div.topbar
+            {
+                background-color: navy;
+                height: 50px;
+                padding: 20px
+                padding: 20px;
+            }
+
+            div.topbar-title
+            {
+                position: absolute;
+                top: 10px;
+                left: 30px;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 26px;
+                font-weight: bold;
+                color: white;
+            }
+
+            div.topbar-right
+            {
+                position: absolute;
+                right: 50px;
+                top: 16px;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 14px;
+                font-weight: bold;
+                color: white;
+            }
+
+            div.topbar-right a
+            {
+                color: white;
+                text-decoration: none;
+            }
+
+            div.message
+            {
+                padding-left: 3em;
+            }
+
+            div.contents
+            {
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 16px;
+                text-color: #101010;
+                margin: 30px 40px;
+            }
+
+            /* This affects only heap views. */
+            div#info
+            {
+                background-color: Gainsboro;
+                border: 1px solid LightSteelBlue;
+                padding: 1em 1.3em;
+            }
+
+            div#info p
+            {
+                margin: 0 0 1em 0;
+            }
+
+            /* This affects only conv views. */
+            div.conv-head h2
+            {
+                color: white;
+                font-size: 1px;
+            }
+
+            div.conv-head span.label
+            {
+                background: Moccasin;
+                color: #202020;
+                font-weight: normal;
+                font-size: 20px;
+                padding: 5px 10px;
+                margin-right: 1.3em;
+            }
+
+            a.rmlabel
+            {
+                padding-left: 5px;
+                text-decoration: none;
+                color: red;
+            }
+
+            a.addlabel
+            {
+                /* background: Moccasin; */
+                font-size: 20px;
+                text-decoration: none;
+                color: blue;
+            }
+
+            /* Messages. */
+            div.message h3
+            {
+                display: inline;
+            }
+
+            div.message_head span.author
+            {
+                font-weight: bold;
+            }
+
+            div.message_head
+            {
+                margin-top: 2em;
+            }
+
+            div.message_head span
+            {
+                margin-right: 1.3em;
+            }
+
+            div.message_head_line3
+            {
+                font-size: smaller;
+            }
+
+            div.message_head_line2
+            {
+                color: white;
+                font-size: 1px;
+                margin: 5px 0;
+            }
+
+            div.message_head_line2 span.label
+            {
+                background: Moccasin;
+                color: #202020;
+                font-weight: normal;
+                font-size: 15px;
+                padding: 2px 5px;
+            }
+
+            img.gravatar
+            {
+                float: left;
+                margin-right: 0.8em;
+            }
         </style>
     </head>
     <body>
         <div class="topbar">
-            {% if user.is_authenticated %}
-                {{ user.username }} | <a href="{% url logout %}">Log out</a>
-            {% else %}
-                <a href="{% url login %}">Log in</a> | 
-                <a href="{% url register %}">Register</a>
-            {% endif %}
+            <div class="topbar-title">
+                <a id="logo" href="/">Heapkeeper</a>
+            </div>
+            <div class="topbar-right">
+                {% if user.is_authenticated %}
+                    {{ user.username }} | <a href="{% url logout %}">Log out</a>
+                {% else %}
+                <div class="toplinks">
+                    <a href="{% url login %}">Log in</a>
+                    &nbsp; &nbsp; &nbsp;
+                    <a href="{% url register %}">Register</a>
+                </div>
+                {% endif %}
+            </div>
         </div>
 
-        <h1>
-            {% block header %}{% endblock %}
-        </h1>
+        <div class="contents">
+            <h1>
+                {% block header %}{% endblock %}
+            </h1>
 
-        {% block body %}{% endblock %}
+            {% block body %}{% endblock %}
+        </div>
     </body>
 <html>

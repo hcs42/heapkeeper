@@ -1,3 +1,4 @@
+
 # This file is part of Heapkeeper.
 #
 # Heapkeeper is free software: you can redistribute it and/or modify it under
@@ -28,42 +29,107 @@ from fsck import fsck
 import django.db
 from hk.models import *
 import datetime
+import urllib, hashlib
 
 ##### Helper functions 
 
-def format_labels(obj, conv=False):
-    labels = ['%s <a class="rmlabel" href="%s">x</a>'
-                % (label.pk,
-                    reverse('hk.views.removeconversationlabel',
-                        args=(label.pk, obj.id,)))
-                for label in obj.labels.all()]
+def get_user_icon(user, heap, size):
+    email = user.email if user is not None else ""
+    url = ("http://www.gravatar.com/avatar/"
+                       + hashlib.md5(email.lower()).hexdigest()
+                       + "?")
+    if user is None:
+        default = "http://www.veryicon.com/icon/png/System/Scrap/User.png"
+    elif user.is_superuser:
+        default = "http://d3db.com/static/gameasset/quest/Portrait_Cain.png"
+    elif heap.get_effective_userright(user) == 3:
+        default = "http://icons.iconarchive.com/icons/aha-soft/people/256/army-officer-icon.png"
+    else:
+        default= "http://www.clker.com/cliparts/b/1/f/a/1195445301811339265dagobert83_female_user_icon.svg.thumb.png"
+    url += urllib.urlencode({'s': str(size), 'd': default})
+    return url
+
+def format_labels(obj, conv=False, add_controls = False):
     if conv:
+        labels_obj = obj
+    else:
+        labels_obj = obj.latest_version()
+    rmview = 'hk.views.remove%slabel' \
+                % ('conversation' if conv else 'message')
+    addview = 'hk.views.add%slabel' \
+                % ('conversation' if conv else 'message')
+    if add_controls:
+        labels = [u'<span class="label">%s<a class="rmlabel" href="%s">\u00d7</a></span>'
+                    % (label.pk,
+                        reverse(rmview,
+                                args=(label.pk, obj.id,)))
+                    for label in labels_obj.labels.all()]
+    else: 
+        labels = [u'<span class="label">%s</span>'
+                    % (label.pk,)
+                    for label in labels_obj.labels.all()]
+
+    if add_controls:
         labels.append('<a class="addlabel" href="%s">+</a>'
-                        % reverse('hk.views.addconversationlabel',
+                        % reverse(addview,
                             args=(obj.id,)))
     return '[%s]' % ', '.join([l for l in labels])
 
-def print_message(l, msg):
+def print_message(l, msg, request_user):
+    lv = msg.latest_version()
+    heap = msg.get_heap()
+    author = lv.author
+    gravatar_size = 70
+    gravatar_url = get_user_icon(author, heap, gravatar_size)
+
+    if author is None:
+        controls = True
+    elif author == request_user:
+        # The author can edit their own post if they can send
+        controls = heap.get_effective_userright(request_user) >= 1
+    else:
+        # The author can edit sy else's post if they can alter
+        controls = heap.get_effective_userright(request_user) >= 2
+
     children = msg.get_children()
     edit_url = reverse('hk.views.editmessage', args=(msg.id,))
     reply_url = reverse('hk.views.replymessage', args=(msg.id,))
     delete_url = reverse('hk.views.delmessage', args=(msg.id,))
     l.append("<div class='message'>\n")
-    l.append("<a name='message_%d'></a>\n" % msg.id)
-    l.append('<h3>\n&lt;%d&gt;\n</h3>\n' % msg.id)
-    author = msg.latest_version().author
+    l.append("<div class='message_head'>\n")
+
+    l.append("<div class='message_head_line1'>\n")
+    l.append("<img class='gravatar' src='%s' width='%d'></img>\n"
+                % (gravatar_url, gravatar_size))
     if author is None:
         author = 'anonymous user'
-    l.append('<h3>\n%s\n</h3>\n' % author)
-    l.append('<h3>\n%s\n</h3>\n' % format_labels(msg.latest_version()))
-    l.append('<h3>\n%s\n</h3>\n' % msg.latest_version().creation_date)
-    l.append("<a href='%s'>edit</a>\n" % edit_url)
-    l.append("<a href='%s'>reply</a>\n" % reply_url)
-    l.append("<a href='%s'>delete</a>\n" % delete_url)
-    l.append('<p>\n%s\n</p>\n' % msg.latest_version().text)
+    l.append('<span class="author">\n%s\n</span>\n' % author)
+
+    l.append("<a name='message_%d'></a>\n" % msg.id)
+    l.append('<span class="id">\n&lt;%d&gt;\n</span>\n' % msg.id)
+
+    l.append('<span class="date">\n%s\n</span>\n' \
+                % lv.creation_date.strftime("%Y-%m-%d %H:%M:%S"))
+    l.append('</div>\n') # end of 'message_head_line1'
+
+    l.append("<div class='message_head_line2'>\n")
+    l.append('<span class="labels">\n%s\n</span>\n' \
+                % format_labels(msg, add_controls=controls))
+    l.append('</div>\n') # end of 'message_head_line2'
+
+    l.append("<div class='message_head_line3'>\n")
+    button = "<span class='button'><a href='%s'>%s</a></span>\n"
+    l.append(button % (edit_url, "edit"))
+    l.append(button % (reply_url, "reply"))
+    l.append(button % (delete_url, "delete"))
+    l.append('</div>\n') # end of 'message_head_line3'
+    l.append('</div>\n') # end of 'message_head'
+
+    l.append('<p>\n%s\n</p>\n' % lv.text)
     for child in msg.get_children():
-        print_message(l, child)
-    l.append('</div>\n')
+        print_message(l, child, request_user)
+
+    l.append('</div>\n') # end of 'message'
 
 def add_children_recursively(l, root):
     for child in root.get_children():
@@ -93,7 +159,7 @@ def conversation(request, conv_id):
     root = conv.root_message
     l = []
     if not root.is_deleted():
-        print_message(l, root)
+        print_message(l, root, request.user)
     else:
         raise Http404
     ls = [unicode(m) for m in l]
@@ -106,12 +172,14 @@ def conversation(request, conv_id):
             needed_right = 1
         else:
             needed_right = 2 
-    add_conv_controls = effective_right >= needed_right
+    add_controls = effective_right >= needed_right
     return render(
             request,
             'conversation.html',
             {'conv': conv,
-             'conv_labels': format_labels(conv, conv=add_conv_controls),
+             'conv_labels': format_labels(conv, conv=True, 
+                                          add_controls=add_controls
+             ),
              'l': '\n'.join(ls)}
         )
 
@@ -180,6 +248,38 @@ def removeconversationlabel(request, label_text, obj_id):
     label = get_object_or_404(Label, pk=label_text)
     conv.labels.remove(label)
     conv.save()
+    if label.messageversion_set.count() == 0 \
+            and label.conversation_set.count() == 0:
+        label.delete()
+    return redirect(reverse('hk.views.conversation', args=(conv.id,)))
+
+def removemessagelabel(request, label_text, obj_id):
+    msg = get_object_or_404(Message, pk=obj_id)
+    conv = msg.get_conversation()
+    lv = msg.latest_version()
+    if lv.author is None:
+        needed_level = 1
+    elif request.user.id == lv.author.id:
+        needed_level = 1
+    else:
+        needed_level = 2 
+    heap = msg.get_heap()
+    heap.check_access(request.user, needed_level)
+    label = get_object_or_404(Label, pk=label_text)
+    labels = list(lv.labels.all())
+    labels.remove(label)
+    now = datetime.datetime.now()
+    mv = MessageVersion(
+            message=msg,
+            author=lv.author,
+            parent=lv.parent,
+            creation_date=lv.creation_date,
+            version_date=now,
+            text=lv.text,
+        )
+    mv.save()
+    mv.labels = labels
+    mv.save()
     if label.messageversion_set.count() == 0 \
             and label.conversation_set.count() == 0:
         label.delete()
@@ -483,6 +583,8 @@ def delmessage_access_controller(variables):
     if variables['request'].user.is_anonymous():
         # Anonymous users cannot be allowed to delete anonymous posts
         needed_level = 2
+    elif message.latest_version().author is None:
+        needed_level = 1
     elif variables['request'].user.id != message.latest_version().author.id:
         needed_level = 2 
     else:
@@ -633,6 +735,7 @@ def editmessage_creator(variables):
     msg_conv = msg.get_conversation()
     heap = msg.get_heap()
     curr_parent = msg.latest_version().parent
+    curr_labels = list(msg.latest_version().labels.all())
     try:
         new_parent = form.cleaned_data['parent']
     except DoesNotExist:
@@ -645,6 +748,8 @@ def editmessage_creator(variables):
             version_date=now,
             text=form.cleaned_data['text']
         )
+    mv.save()
+    mv.labels = curr_labels
     mv.save()
     # Joining conversations
     if curr_parent is None and new_parent is not None:
@@ -815,49 +920,88 @@ addright = make_view(
                 addright_access_controller
             )
 
-##### "Add conversation label" view
+##### "Add label" views: one for conv, one for msg
 
-class AddConversationLabelForm(forms.Form):
+class AddLabelForm(forms.Form):
     label = forms.CharField()
 
 def addconversationlabel_init(variables):
-    conv = get_object_or_404(Conversation, pk=variables['obj_id'])
-    variables['conv'] = conv
+    obj = get_object_or_404(Conversation, pk=variables['obj_id'])
+    variables['obj'] = obj
 
-def addconversationlabel_creator(variables):
-    conv = variables['conv']
+def addmessagelabel_init(variables):
+    obj = get_object_or_404(Message, pk=variables['obj_id'])
+    variables['obj'] = obj
+
+def addlabel_creator(variables):
+    obj = variables['obj']
     label = variables['form'].cleaned_data['label']
-    print "Adding label %s to conv %d." % (label, conv.id)
     try:
         label_obj = Label.objects.get(pk=label)
     except Label.DoesNotExist:
         label_obj = Label(text=label)
         label_obj.save()
-    conv.labels.add(label_obj)
-    conv.save()
+    if obj.__class__ == Conversation:
+        conv = obj
+        conv.labels.add(label_obj)
+        conv.save()
+    else:
+        conv = obj.get_conversation()
+        lv = obj.latest_version()
+        labels = list(lv.labels.all())
+        labels.append(label_obj)
+        now = datetime.datetime.now()
+        mv = MessageVersion(
+                message=obj,
+                author=lv.author,
+                parent=lv.parent,
+                creation_date=lv.creation_date,
+                version_date=now,
+                text=lv.text,
+            )
+        mv.save()
+        mv.labels = labels
+        mv.save()
+        
     variables['error_message'] = 'OKOKOKOK'
+
     return redirect(reverse('hk.views.conversation', args=(conv.id,)))
 
 def addconversationlabel_access_controller(variables):
     # If the root post is owned by the user, send (1) is needed,
     # otherwise alter (2).
-    conv = variables['conv']
-    root_author = conv.root_message.latest_version().author
-    if root_author is None:
+    obj = variables['obj']
+    if obj.__class__ == Conversation:
+        author = obj.root_message.latest_version().author
+        heap = obj.heap
+    else:
+        author = obj.latest_version().author
+        heap = obj.get_heap()
+    if author is None:
         needed_level = 1
-    elif variables['request'].user.id == root_author.id:
+    elif variables['request'].user.id == author.id:
         needed_level = 1
     else:
         needed_level = 2 
-    conv.heap.check_access(variables['request'].user, needed_level)
+    heap.check_access(variables['request'].user, needed_level)
 
 addconversationlabel = make_view(
-                AddConversationLabelForm,
+                AddLabelForm,
                 addconversationlabel_init,
-                addconversationlabel_creator,
+                addlabel_creator,
                 make_displayer('addconversationlabel.html',
                     ('error_message', 'form', 'obj_id')),
                 addconversationlabel_access_controller,
                 addconversationlabel_access_controller
             )
 
+
+addmessagelabel = make_view(
+                AddLabelForm,
+                addmessagelabel_init,
+                addlabel_creator,
+                make_displayer('addmessagelabel.html',
+                    ('error_message', 'form', 'obj_id')),
+                addconversationlabel_access_controller,
+                addconversationlabel_access_controller
+            )

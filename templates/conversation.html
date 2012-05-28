@@ -6,10 +6,12 @@
     {{ conv.subject }}
 {% endblock %}
 {% block body %}
-        <h2>
-            {{ conv_labels|safe }}
-        </h2>
-        <p>
+        <div class="conv-head">
+            <h2>
+                {{ conv_labels|safe }}
+            </h2>
+        </div>
+        <div class="conv">
             {{ l|safe }}
-        </p>
+        </div>
 {% endblock %}

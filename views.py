@@ -583,6 +583,8 @@ def delmessage_access_controller(variables):
     if variables['request'].user.is_anonymous():
         # Anonymous users cannot be allowed to delete anonymous posts
         needed_level = 2
+    elif message.latest_version().author is None:
+        needed_level = 1
     elif variables['request'].user.id != message.latest_version().author.id:
         needed_level = 2 
     else:

@@ -162,6 +162,9 @@ class Heap(models.Model):
         return highest.right if highest is not None else -1
 
     def get_effective_userright(self, user):
+        # Skip all checks if the user is None, then xe is anon.
+        if user is None:
+            return -1
         # Superusers are heapadmins on all heaps
         if user.is_superuser:
             return 3

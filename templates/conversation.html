@@ -4,6 +4,11 @@
 {% endblock %}
 {% block header %}
     {{ conv.subject }}
+    {% if add_controls %}
+    <a class="editsubject" href="{% url hk.views.editsubject conv.id %}">
+        edit
+    </a>
+    {% endif %}
 {% endblock %}
 {% block body %}
         <div class="conv-head">

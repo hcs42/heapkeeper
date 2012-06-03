@@ -26,6 +26,7 @@ from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.http import Http404
 from django.core.urlresolvers import reverse
 from fsck import fsck
+from emaillistener import smtp, enable_smtp, disable_smtp
 import django.db
 from hk.models import *
 import datetime

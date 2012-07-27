@@ -78,16 +78,17 @@ class FakeSMTPServer(smtpd.DebuggingServer):
         message_from_mail(mailfrom, rcpttos, subject, text)
 
 
-def server_thread():
-    smtp_server = FakeSMTPServer(('0.0.0.0', 25), None)
+def server_thread(port=25):
+    smtp_server = FakeSMTPServer(('0.0.0.0', port), None)
     asyncore.loop()
 
-def run_server_thread():
+def run_server_thread(port):
     global email_thread
     if email_thread is not None and email_thread.is_alive():
         print "STMP thread already running!"
         return
-    email_thread = multiprocessing.Process(target=server_thread)
+    email_thread = multiprocessing.Process(target=server_thread,
+                                           args=(int(port),))
     email_thread.start()
     print "STMP thread started."
 
@@ -160,12 +161,12 @@ def smtp(request):
                'smtp.html',
                {'running': alive})
 
-def enable_smtp(request):
+def enable_smtp(request, port=25):
     # Must be admin to use
     if not request.user.is_superuser:
         raise PermissionDenied
     
-    run_server_thread()
+    run_server_thread(port)
     
     return redirect(reverse('hk.views.smtp'))
 

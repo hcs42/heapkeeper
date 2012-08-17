@@ -23,6 +23,7 @@ import datetime
 
 class Message(models.Model):
     users_have_read = models.ManyToManyField(User, null=True, blank=True)
+    message_id = models.CharField(max_length=1024, null=True, blank=True) 
 
     def __unicode__(self):
         return "Message #%d" % (

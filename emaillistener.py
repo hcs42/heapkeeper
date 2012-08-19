@@ -57,6 +57,8 @@ class FakeSMTPServer(smtpd.DebuggingServer):
         mail = email.message_from_string(data)
 
         subject = email.header.decode_header(mail['Subject'])[0][0]
+        message_id = email.header.decode_header(mail['Message-ID'])[0][0]
+        in_reply_to = email.header.decode_header(mail['In-Reply-To'])[0][0]
 
         text = mail.get_payload()
         encoding = mail['Content-Transfer-Encoding']
@@ -75,7 +77,9 @@ class FakeSMTPServer(smtpd.DebuggingServer):
         text = utf8(text, charset)
         text = normalize_str(text)
 
-        message_from_mail(mailfrom, rcpttos, subject, text)
+        message_from_mail(mailfrom, rcpttos,
+                          subject, message_id, in_reply_to,
+                          text)
 
 
 def server_thread(port=25):
@@ -97,7 +101,9 @@ def stop_server_thread():
 
 ##### Mail to message
 
-def message_from_mail(mailfrom, rcpttos, subject, text):
+def message_from_mail(mailfrom, rcpttos,
+                      subject, message_id, in_reply_to,
+                      text):
     # TODO Add access control!!!
     # TODO Should cross posting be allowed?
 
@@ -124,22 +130,31 @@ def message_from_mail(mailfrom, rcpttos, subject, text):
                 author = None
         except User.DoesNotExist:
             author = None
+
+        try:
+            parent = Message.objects.get(message_id=in_reply_to)
+        except Message.DoesNotExist:
+            parent = None
+
         root_msg = Message()
+        root_msg.message_id = message_id
         root_msg.save()
         mv = MessageVersion(
                 message=root_msg,
                 author=author,
                 creation_date=now,
                 version_date=now,
+                parent=parent,
                 text=text
             )
         mv.save()
-        conv = Conversation(
-                heap=heap,
-                subject=subject,
-                root_message=root_msg
-            )
-        conv.save()
+        if parent is None:
+            conv = Conversation(
+                    heap=heap,
+                    subject=subject,
+                    root_message=root_msg
+                )
+            conv.save()
 
 
 ##### "smtp" views

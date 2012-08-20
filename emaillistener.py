@@ -101,6 +101,42 @@ def stop_server_thread():
 
 ##### Mail to message
 
+# This is function is almost verbatim from the first generation Hk
+def parse_subject(subject):
+    """Parses the subject of an email.
+
+    Parses the labels and removes the "Re:" prefix and whitespaces.
+
+    **Argument:**
+
+    - `subject` (str)
+
+    **Returns:** (str, [str]) -- The remaining subject and the labels.
+    """
+
+    # last_bracket==None  <=>  we are outside of a [label]
+    last_bracket = None
+    brackets = []
+    i = 0
+    while i < len(subject):
+        c = subject[i]
+        if c == '[' and last_bracket == None:
+            last_bracket = i
+        elif c == ']' and last_bracket != None:
+            brackets.append((last_bracket, i))
+            last_bracket = None
+        elif c != ' ' and last_bracket == None:
+            break
+        i += 1
+
+    real_subject = subject[i:]
+    if re.match('[Rr]e:', subject):
+        subject = subject[3:]
+    real_subject = real_subject.strip()
+
+    labels = [ subject[first+1:last].strip() for first, last in brackets ]
+    return real_subject, labels
+
 def message_from_mail(mailfrom, rcpttos,
                       subject, message_id, in_reply_to,
                       text):
@@ -136,11 +172,13 @@ def message_from_mail(mailfrom, rcpttos,
         except Message.DoesNotExist:
             parent = None
 
-        root_msg = Message()
-        root_msg.message_id = message_id
-        root_msg.save()
+        real_subject, labels = parse_subject(subject)
+
+        msg = Message()
+        msg.message_id = message_id
+        msg.save()
         mv = MessageVersion(
-                message=root_msg,
+                message=msg,
                 author=author,
                 creation_date=now,
                 version_date=now,
@@ -148,13 +186,19 @@ def message_from_mail(mailfrom, rcpttos,
                 text=text
             )
         mv.save()
+
         if parent is None:
             conv = Conversation(
                     heap=heap,
-                    subject=subject,
-                    root_message=root_msg
+                    subject=real_subject,
+                    root_message=msg
                 )
             conv.save()
+            label_target = conv
+        else:
+            label_target = msg
+
+        label_target.add_label(labels)
 
 
 ##### "smtp" views

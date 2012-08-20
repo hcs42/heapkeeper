@@ -938,35 +938,13 @@ def addmessagelabel_init(variables):
 def addlabel_creator(variables):
     obj = variables['obj']
     label = variables['form'].cleaned_data['label']
-    try:
-        label_obj = Label.objects.get(pk=label)
-    except Label.DoesNotExist:
-        label_obj = Label(text=label)
-        label_obj.save()
+    obj.add_label(label)
     if obj.__class__ == Conversation:
         conv = obj
-        conv.labels.add(label_obj)
-        conv.save()
     else:
         conv = obj.get_conversation()
-        lv = obj.latest_version()
-        labels = list(lv.labels.all())
-        labels.append(label_obj)
-        now = datetime.datetime.now()
-        mv = MessageVersion(
-                message=obj,
-                author=lv.author,
-                parent=lv.parent,
-                creation_date=lv.creation_date,
-                version_date=now,
-                text=lv.text,
-            )
-        mv.save()
-        mv.labels = labels
-        mv.save()
         
     variables['error_message'] = 'OKOKOKOK'
-
     return redirect(reverse('hk.views.conversation', args=(conv.id,)))
 
 def addconversationlabel_access_controller(variables):

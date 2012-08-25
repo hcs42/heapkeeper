@@ -26,6 +26,7 @@ from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.http import Http404
 from django.core.urlresolvers import reverse
 from fsck import fsck
+from emaillistener import smtp, enable_smtp, disable_smtp
 import django.db
 from hk.models import *
 import datetime
@@ -177,6 +178,7 @@ def conversation(request, conv_id):
             request,
             'conversation.html',
             {'conv': conv,
+             'add_controls': add_controls,
              'conv_labels': format_labels(conv, conv=True, 
                                           add_controls=add_controls
              ),
@@ -936,35 +938,13 @@ def addmessagelabel_init(variables):
 def addlabel_creator(variables):
     obj = variables['obj']
     label = variables['form'].cleaned_data['label']
-    try:
-        label_obj = Label.objects.get(pk=label)
-    except Label.DoesNotExist:
-        label_obj = Label(text=label)
-        label_obj.save()
+    obj.add_label(label)
     if obj.__class__ == Conversation:
         conv = obj
-        conv.labels.add(label_obj)
-        conv.save()
     else:
         conv = obj.get_conversation()
-        lv = obj.latest_version()
-        labels = list(lv.labels.all())
-        labels.append(label_obj)
-        now = datetime.datetime.now()
-        mv = MessageVersion(
-                message=obj,
-                author=lv.author,
-                parent=lv.parent,
-                creation_date=lv.creation_date,
-                version_date=now,
-                text=lv.text,
-            )
-        mv.save()
-        mv.labels = labels
-        mv.save()
         
     variables['error_message'] = 'OKOKOKOK'
-
     return redirect(reverse('hk.views.conversation', args=(conv.id,)))
 
 def addconversationlabel_access_controller(variables):
@@ -1004,4 +984,47 @@ addmessagelabel = make_view(
                     ('error_message', 'form', 'obj_id')),
                 addconversationlabel_access_controller,
                 addconversationlabel_access_controller
+            )
+
+##### "Edit subject" view
+
+class EditSubjectForm(forms.Form):
+    subject = forms.CharField()
+
+def editsubject_init(variables):
+    conv = get_object_or_404(Conversation, pk=variables['obj_id'])
+    form_initial = {
+                'subject': conv.subject
+            }
+    variables['conv'] = conv
+    variables['form_initial'] = form_initial
+
+def editsubject_creator(variables):
+    conv = variables['conv']
+    subject = variables['form'].cleaned_data['subject']
+    conv.subject = subject
+    conv.save()
+    variables['error_message'] = 'OKOKOKOK'
+    return redirect(reverse('hk.views.conversation', args=(conv.id,)))
+
+def editsubject_access_controller(variables):
+    conv = variables['conv']
+    author = conv.root_message.latest_version().author
+    heap = conv.heap
+    if author is None:
+        needed_level = 1
+    elif variables['request'].user.id == author.id:
+        needed_level = 1
+    else:
+        needed_level = 2 
+    heap.check_access(variables['request'].user, needed_level)
+
+editsubject = make_view(
+                EditSubjectForm,
+                editsubject_init,
+                editsubject_creator,
+                make_displayer('editsubject.html',
+                    ('error_message', 'form', 'obj_id')),
+                editsubject_access_controller,
+                editsubject_access_controller
             )

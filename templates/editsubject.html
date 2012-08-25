@@ -1,0 +1,9 @@
+{% extends "form.html" %}
+{% block title %}
+    Edit subject of conversation
+{% endblock %}
+{% block header %}
+    Edit subject of conversation
+{% endblock %}
+{% block action %}{% url hk.views.editsubject obj_id %}{% endblock %}
+{% block submittext%}Save subject{% endblock %}

@@ -21,8 +21,18 @@ from django.core import urlresolvers
 from django.core.exceptions import PermissionDenied
 import datetime
 
+def get_or_make_label_obj(label):
+    try:
+        label_obj = Label.objects.get(pk=label)
+    except Label.DoesNotExist:
+        label_obj = Label(text=label)
+        label_obj.save()
+    return label_obj
+        
+
 class Message(models.Model):
     users_have_read = models.ManyToManyField(User, null=True, blank=True)
+    message_id = models.CharField(max_length=1024, null=True, blank=True) 
 
     def __unicode__(self):
         return "Message #%d" % (
@@ -63,11 +73,24 @@ class Message(models.Model):
                 creation_date=latest.creation_date,
                 version_date=datetime.datetime.now(),
                 text=latest.text,
-                deleted = True
             )
+        # We have to save before because many-to-many relations need a PK.
+        mv.save()
+        mv.labels = list(latest.labels.all())
         for field in kwargs:
             setattr(mv, field, kwargs[field])
         mv.save() 
+
+    def add_label(self, label_or_labels):
+        if label_or_labels.__class__ in (str, unicode):
+            label_list = (label_or_labels,)
+        else:
+            label_list = label_or_labels
+
+        label_objs = [ get_or_make_label_obj(label) for label in label_list ]
+        labels = list(self.latest_version().labels.all())
+        labels.extend(label_objs)
+        self.change(labels=labels)
 
     def current_parent(self):
         parent = self.latest_version().parent
@@ -225,6 +248,17 @@ class Conversation(models.Model):
                 self.id,
                 self.subject,
             )
+
+    def add_label(self, label_or_labels):
+        if label_or_labels.__class__ in (str, unicode):
+            label_list = (label_or_labels,)
+        else:
+            label_list = label_or_labels
+
+        label_objs = [ get_or_make_label_obj(label) for label in label_list ]
+        for label_obj in label_objs:
+            self.labels.add(label_obj)
+        self.save()
 
 class HkException(Exception):
     """A very simple exception class used."""
